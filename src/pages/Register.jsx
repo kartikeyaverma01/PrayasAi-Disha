@@ -3,10 +3,23 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { FaUser, FaEnvelope, FaLock, FaPhone, FaUniversity, FaArrowLeft, FaBriefcase, FaEye, FaEyeSlash } from 'react-icons/fa'
 import { useAuth } from '../context/AuthContext'
+import { DOMAIN_OPTIONS } from '../data/profile'
 
 const degrees = ['B.Tech', 'B.E.', 'BCA', 'B.Sc', 'BBA', 'MCA', 'M.Tech', 'MBA', 'M.Sc', 'Other']
 const currentYear = new Date().getFullYear()
 const graduationYears = Array.from({ length: 6 }, (_, i) => currentYear - 1 + i)
+
+const SKILL_OPTIONS = [
+  'HTML', 'CSS', 'JavaScript', 'React', 'Python', 'Java', 'C++', 'SQL',
+  'FastAPI', 'Node.js', 'Git', 'Data Analysis', 'Machine Learning', 'Cloud',
+  'UI/UX', 'Figma', 'Power BI', 'MongoDB',
+]
+
+const INTEREST_OPTIONS = [
+  'Web Development', 'Software Development', 'Data Science', 'Artificial Intelligence',
+  'Machine Learning', 'Backend Development', 'Frontend Development', 'Cloud Computing',
+  'Cyber Security', 'Mobile Development', 'UI/UX Design', 'Business & Analytics',
+]
 
 export default function Register() {
   const { register: registerUser } = useAuth()
@@ -15,18 +28,47 @@ export default function Register() {
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [step, setStep] = useState(1)
 
   const {
     register,
     handleSubmit,
     watch,
+    setValue,
+    trigger,
     formState: { errors },
-  } = useForm({ mode: 'onBlur' })
+  } = useForm({
+    mode: 'onBlur',
+    defaultValues: { skills: [], interests: [], preferredDomain: '' },
+  })
 
   const password = watch('password')
+  const selectedSkills = watch('skills', []) || []
+  const selectedInterests = watch('interests', []) || []
+  const selectedDomain = watch('preferredDomain', '')
+
+  const toggleSelection = (field, value) => {
+    const current = watch(field, []) || []
+    const next = current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value]
+    setValue(field, next, { shouldDirty: true, shouldValidate: true })
+  }
+
+  const continueToPreferences = async () => {
+    const valid = await trigger([
+      'fullName', 'email', 'password', 'confirmPassword', 'mobile',
+      'college', 'degree', 'branch', 'graduationYear',
+    ])
+    if (valid) setStep(2)
+  }
 
   const onSubmit = async (data) => {
     setServerError('')
+    if (!data.skills?.length || !data.interests?.length || !data.preferredDomain) {
+      setServerError('Please select at least one skill, one interest, and your preferred job field.')
+      return
+    }
     setSubmitting(true)
     try {
       await registerUser(data)
@@ -59,7 +101,13 @@ export default function Register() {
                 </div>
 
                 <h1 className="h3 fw-bold mb-1">Create your account</h1>
-                <p className="text-muted mb-4">Start getting AI-matched internships in minutes</p>
+                <p className="text-muted mb-4">Tell us about yourself so PrayasAI Disha can personalize your internship matches.</p>
+
+                <div className="d-flex align-items-center gap-2 mb-4 small">
+                  <span className={`badge rounded-pill ${step === 1 ? 'text-bg-primary' : 'text-bg-light text-dark'}`}>1. Account & Education</span>
+                  <span className="text-muted">→</span>
+                  <span className={`badge rounded-pill ${step === 2 ? 'text-bg-primary' : 'text-bg-light text-dark'}`}>2. Skills & Career Preferences</span>
+                </div>
 
                 {serverError && (
                   <div className="alert alert-danger py-2" role="alert">
@@ -68,6 +116,7 @@ export default function Register() {
                 )}
 
                 <form onSubmit={handleSubmit(onSubmit)} noValidate>
+                  {step === 1 && (
                   <div className="row g-3">
                     <div className="col-12 col-md-6">
                       <label htmlFor="fullName" className="form-label">
@@ -267,8 +316,80 @@ export default function Register() {
                       )}
                     </div>
                   </div>
+                  )}
 
-                  <button type="submit" className="btn btn-primary w-100 py-2 fw-semibold mt-4" disabled={submitting}>
+                  {step === 2 && (
+                    <div>
+                      <div className="dashboard-panel border-0 bg-light-subtle mb-4 p-3 p-md-4">
+                        <h2 className="h5 fw-bold mb-1">Your skills</h2>
+                        <p className="small text-muted mb-3">Select the skills you already have. You can add more later from your Profile.</p>
+                        <div className="d-flex flex-wrap gap-2">
+                          {SKILL_OPTIONS.map((skill) => {
+                            const selected = selectedSkills.includes(skill)
+                            return (
+                              <button
+                                key={skill}
+                                type="button"
+                                className={`btn btn-sm rounded-pill ${selected ? 'btn-primary' : 'btn-outline-secondary'}`}
+                                onClick={() => toggleSelection('skills', skill)}
+                              >
+                                {selected ? '✓ ' : '+ '}{skill}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <input type="hidden" {...register('skills')} />
+                      </div>
+
+                      <div className="dashboard-panel border-0 bg-light-subtle mb-4 p-3 p-md-4">
+                        <h2 className="h5 fw-bold mb-1">Your interests</h2>
+                        <p className="small text-muted mb-3">Choose the areas you would like to explore through internships.</p>
+                        <div className="d-flex flex-wrap gap-2">
+                          {INTEREST_OPTIONS.map((interest) => {
+                            const selected = selectedInterests.includes(interest)
+                            return (
+                              <button
+                                key={interest}
+                                type="button"
+                                className={`btn btn-sm rounded-pill ${selected ? 'btn-primary' : 'btn-outline-secondary'}`}
+                                onClick={() => toggleSelection('interests', interest)}
+                              >
+                                {selected ? '✓ ' : '+ '}{interest}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <input type="hidden" {...register('interests')} />
+                      </div>
+
+                      <div className="dashboard-panel border-0 bg-light-subtle p-3 p-md-4">
+                        <label htmlFor="preferredDomain" className="form-label fw-semibold">What field do you want to work in?</label>
+                        <p className="small text-muted">This helps us prioritize relevant internships and recommendations.</p>
+                        <select
+                          id="preferredDomain"
+                          className={`form-select ${!selectedDomain && serverError ? 'is-invalid' : ''}`}
+                          {...register('preferredDomain', { required: 'Please select your preferred job field' })}
+                        >
+                          <option value="">Select your preferred job field</option>
+                          {DOMAIN_OPTIONS.map((domain) => <option key={domain} value={domain}>{domain}</option>)}
+                        </select>
+                        {errors.preferredDomain && <div className="invalid-feedback">{errors.preferredDomain.message}</div>}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="d-flex gap-2 mt-4">
+                    {step === 2 && (
+                      <button type="button" className="btn btn-outline-secondary flex-grow-1 py-2 fw-semibold" onClick={() => setStep(1)} disabled={submitting}>
+                        Back
+                      </button>
+                    )}
+                    {step === 1 ? (
+                      <button type="button" className="btn btn-primary flex-grow-1 py-2 fw-semibold" onClick={continueToPreferences}>
+                        Continue to Preferences →
+                      </button>
+                    ) : (
+                  <button type="submit" className="btn btn-primary flex-grow-1 py-2 fw-semibold" disabled={submitting}>
                     {submitting ? (
                       <>
                         <span className="spinner-border spinner-border-sm me-2" />
@@ -278,6 +399,8 @@ export default function Register() {
                       'Create Account'
                     )}
                   </button>
+                    )}
+                  </div>
                 </form>
 
                 <p className="text-center text-muted mt-4 mb-0 small">

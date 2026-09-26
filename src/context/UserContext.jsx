@@ -1,6 +1,6 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState } from "react";
 
-const UserContext = createContext(null)
+const UserContext = createContext(null);
 
 /**
  * Holds the student's profile/skills/interests/preferences data.
@@ -9,23 +9,23 @@ const UserContext = createContext(null)
  * Populated from profileService in later phases (mock or FastAPI).
  */
 export function UserProvider({ children }) {
-  const [profile, setProfile] = useState(null)
-  const [profileLoading, setProfileLoading] = useState(false)
+  const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   const value = {
     profile,
     setProfile,
     profileLoading,
     setProfileLoading,
-  }
+  };
 
-  return <UserContext.Provider value={value}>{children}</UserContext.Provider>
+  return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 }
 
 export function useUserProfile() {
-  const context = useContext(UserContext)
+  const context = useContext(UserContext);
   if (!context) {
-    throw new Error('useUserProfile must be used within a UserProvider')
+    throw new Error("useUserProfile must be used within a UserProvider");
   }
-  return context
+  return context;
 }
