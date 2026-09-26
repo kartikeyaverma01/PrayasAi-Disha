@@ -1,8 +1,14 @@
-import { Link } from 'react-router-dom'
-import { FaBriefcase, FaLinkedin, FaTwitter, FaGithub, FaEnvelope } from 'react-icons/fa'
+import { Link } from "react-router-dom";
+import {
+  FaBriefcase,
+  FaLinkedin,
+  FaTwitter,
+  FaGithub,
+  FaEnvelope,
+} from "react-icons/fa";
 
 export default function Footer() {
-  const year = new Date().getFullYear()
+  const year = new Date().getFullYear();
 
   return (
     <footer className="app-footer pt-5 pb-4 mt-auto">
@@ -14,13 +20,15 @@ export default function Footer() {
               PrayasAI Disha
             </div>
             <p className="text-secondary small mb-0">
-              AI-powered internship recommendations personalized to your skills, interests,
-              academic profile, and career goals.
+              AI-powered internship recommendations personalized to your skills,
+              interests, academic profile, and career goals.
             </p>
           </div>
 
           <div className="col-6 col-md-2">
-            <h6 className="text-uppercase small fw-bold text-secondary mb-3">Product</h6>
+            <h6 className="text-uppercase small fw-bold text-secondary mb-3">
+              Product
+            </h6>
             <ul className="list-unstyled small">
               <li className="mb-2">
                 <a href="#how-it-works" className="footer-link">
@@ -41,7 +49,9 @@ export default function Footer() {
           </div>
 
           <div className="col-6 col-md-3">
-            <h6 className="text-uppercase small fw-bold text-secondary mb-3">Get Started</h6>
+            <h6 className="text-uppercase small fw-bold text-secondary mb-3">
+              Get Started
+            </h6>
             <ul className="list-unstyled small">
               <li className="mb-2">
                 <Link to="/register" className="footer-link">
@@ -57,7 +67,9 @@ export default function Footer() {
           </div>
 
           <div className="col-12 col-md-3">
-            <h6 className="text-uppercase small fw-bold text-secondary mb-3">Connect</h6>
+            <h6 className="text-uppercase small fw-bold text-secondary mb-3">
+              Connect
+            </h6>
             <div className="d-flex gap-3 fs-5">
               <a href="#" className="footer-link" aria-label="LinkedIn">
                 <FaLinkedin />
@@ -83,5 +95,5 @@ export default function Footer() {
         </div>
       </div>
     </footer>
-  )
+  );
 }

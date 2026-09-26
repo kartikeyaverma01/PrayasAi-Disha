@@ -5,27 +5,22 @@ import {
   FaSearch,
   FaSlidersH,
 } from "react-icons/fa";
+
 import Navbar from "../components/layout/Navbar";
 import Footer from "../components/layout/Footer";
-import {
-  fetchLiveInternships,
-  calculateMatch,
-  internshipUrl,
-} from "../services/jobService";
-import { useAuth } from "../context/AuthContext";
+
+import { fetchLiveInternships, internshipUrl } from "../services/jobService";
 
 const SAVED_KEY = "prayasai_saved_internships";
 
 export default function Internships() {
-  const { user } = useAuth();
-
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("");
   const [category, setCategory] = useState("");
-  const [sort, setSort] = useState("match");
+  const [sort, setSort] = useState("recent");
 
   const [saved, setSaved] = useState(() => {
     try {
@@ -50,9 +45,9 @@ export default function Internships() {
       .then((jobs) => {
         if (!active) return;
 
-        const matchedJobs = jobs.map((job) => calculateMatch(job, user));
-
-        setItems(matchedJobs);
+        // Normal internship catalogue only.
+        // No frontend matching or recommendation calculation.
+        setItems(Array.isArray(jobs) ? jobs : []);
       })
       .catch((err) => {
         console.error("Could not load internships:", err);
@@ -70,7 +65,7 @@ export default function Internships() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, []);
 
   /* =====================================================
      LOCATION OPTIONS
@@ -131,7 +126,8 @@ export default function Internships() {
         return (b.postedAt || 0) - (a.postedAt || 0);
       }
 
-      return (b.match || 0) - (a.match || 0);
+      // Default catalogue order.
+      return 0;
     });
   }, [items, query, location, category, sort]);
 
@@ -157,7 +153,7 @@ export default function Internships() {
     setQuery("");
     setLocation("");
     setCategory("");
-    setSort("match");
+    setSort("recent");
   };
 
   /* =====================================================
@@ -170,26 +166,22 @@ export default function Internships() {
 
       <main className="internships-page py-4 py-lg-5">
         <div className="container">
-          {/* =================================================
-              HEADER
-          ================================================= */}
+          {/* HEADER */}
 
           <div className="mb-4">
             <span className="eyebrow mb-2">Internship Marketplace</span>
 
             <h1 className="display-6 fw-bold mb-2">
-              Find internships that fit you.
+              Explore internship opportunities.
             </h1>
 
             <p className="text-muted mb-0">
-              Explore internship opportunities across India and find the ones
-              that best match your skills.
+              Browse internship opportunities across India and find roles that
+              match your interests and career goals.
             </p>
           </div>
 
-          {/* =================================================
-              SEARCH PANEL
-          ================================================= */}
+          {/* SEARCH PANEL */}
 
           <div className="internship-search-panel mb-4">
             <div className="search-input-wrap flex-grow-1">
@@ -218,17 +210,13 @@ export default function Internships() {
               value={sort}
               onChange={(e) => setSort(e.target.value)}
             >
-              <option value="match">Best match</option>
-
               <option value="recent">Recently posted</option>
 
               <option value="stipend">Highest stipend</option>
             </select>
           </div>
 
-          {/* =================================================
-              FILTERS
-          ================================================= */}
+          {/* FILTERS */}
 
           <div
             className={`row g-3 mb-4 ${showFilters ? "" : "d-none d-lg-flex"}`}
@@ -287,9 +275,7 @@ export default function Internships() {
             </div>
           </div>
 
-          {/* =================================================
-              LOADING
-          ================================================= */}
+          {/* LOADING */}
 
           {loading && (
             <div className="dashboard-panel mb-4">
@@ -297,9 +283,7 @@ export default function Internships() {
             </div>
           )}
 
-          {/* =================================================
-              INTERNSHIP CARDS
-          ================================================= */}
+          {/* INTERNSHIP CARDS */}
 
           {!loading && (
             <div className="row g-4">
@@ -315,9 +299,7 @@ export default function Internships() {
             </div>
           )}
 
-          {/* =================================================
-              EMPTY STATE
-          ================================================= */}
+          {/* EMPTY STATE */}
 
           {!loading && !results.length && (
             <div className="empty-state">
@@ -347,9 +329,7 @@ function InternshipCard({ item, saved, onSave }) {
 
   return (
     <article className="internship-card h-100">
-      {/* ===================================================
-          HEADER
-      =================================================== */}
+      {/* HEADER */}
 
       <div className="d-flex justify-content-between gap-3">
         <div className="d-flex gap-3 min-w-0">
@@ -386,23 +366,15 @@ function InternshipCard({ item, saved, onSave }) {
         </button>
       </div>
 
-      {/* ===================================================
-          MATCH + DATE
-      =================================================== */}
+      {/* POSTED DATE */}
 
-      <div className="d-flex align-items-center justify-content-between mt-3">
-        <div className="match-badge">
-          <strong>{item.match || 0}%</strong> match
-        </div>
-
+      <div className="d-flex align-items-center justify-content-end mt-3">
         <span className="small text-muted">
           {item.posted || "Recently posted"}
         </span>
       </div>
 
-      {/* ===================================================
-          SKILLS
-      =================================================== */}
+      {/* SKILLS */}
 
       {item.skills?.length > 0 && (
         <div className="d-flex flex-wrap gap-2 my-3">
@@ -414,9 +386,7 @@ function InternshipCard({ item, saved, onSave }) {
         </div>
       )}
 
-      {/* ===================================================
-          META
-      =================================================== */}
+      {/* META */}
 
       <div className="internship-meta">
         <span>{item.stipend || "Stipend not specified"}</span>
@@ -426,9 +396,7 @@ function InternshipCard({ item, saved, onSave }) {
         <span>{item.category || "Other"}</span>
       </div>
 
-      {/* ===================================================
-          LIVE LISTING
-      =================================================== */}
+      {/* LIVE LISTING */}
 
       <a
         className="btn btn-primary w-100 mt-3"
