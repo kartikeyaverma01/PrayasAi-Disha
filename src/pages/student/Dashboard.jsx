@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+
 import {
   FaArrowRight,
   FaBriefcase,
   FaCheckCircle,
   FaChartLine,
   FaClipboardCheck,
+  FaMapMarkerAlt,
   FaRegBookmark,
   FaUserCircle,
 } from "react-icons/fa";
@@ -31,40 +33,134 @@ const read = (key, fallback) => {
   }
 };
 
+const normalizeArray = (value) => {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
+const hasValue = (value) => {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  return String(value ?? "").trim().length > 0;
+};
+
 export default function Dashboard() {
   const { user } = useAuth();
 
   const [recommendations, setRecommendations] = useState([]);
-
   const [loadingRecommendations, setLoadingRecommendations] = useState(true);
 
-  const profile = read(profileKey(user), {});
-
-  const applications = read(APPLICATIONS_KEY, []);
-
-  const saved = read(SAVED_KEY, []);
+  const [profile, setProfile] = useState({});
+  const [applications, setApplications] = useState([]);
+  const [saved, setSaved] = useState([]);
 
   /*
    * ---------------------------------------------------------
-   * Load ML recommendations
+   * LOAD PROFILE
    * ---------------------------------------------------------
    *
-   * The backend/ML team provides:
+   * Dashboard uses the same profile fields as Profile.jsx.
+   * Stored profile data is merged with AuthContext user data so
+   * newly registered users are displayed correctly.
+   */
+
+  useEffect(() => {
+    if (!user?.email) {
+      setProfile({});
+      return;
+    }
+
+    let stored = {};
+
+    try {
+      const raw = localStorage.getItem(profileKey(user));
+
+      if (raw) {
+        stored = JSON.parse(raw) || {};
+      }
+    } catch {
+      stored = {};
+    }
+
+    const authInterests = normalizeArray(user?.interests);
+    const storedInterests = normalizeArray(stored?.interests);
+
+    const interests =
+      storedInterests.length > 0 ? storedInterests : authInterests;
+
+    const preferredJobField =
+      stored?.preferredJobField ||
+      stored?.preferredDomain ||
+      user?.preferredJobField ||
+      user?.preferredDomain ||
+      "";
+
+    const mergedProfile = {
+      fullName: stored?.fullName || user?.fullName || "",
+
+      email: stored?.email || user?.email || "",
+
+      phone: stored?.phone || user?.mobile || user?.phone || "",
+
+      college: stored?.college || user?.college || "",
+
+      degree: stored?.degree || user?.degree || "",
+
+      branch: stored?.branch || user?.branch || "",
+
+      cgpa: stored?.cgpa ?? user?.cgpa ?? "",
+
+      graduationYear: stored?.graduationYear || user?.graduationYear || "",
+
+      skills:
+        Array.isArray(stored?.skills) && stored.skills.length > 0
+          ? stored.skills
+          : normalizeArray(user?.skills),
+
+      interests,
+
+      preferredJobField,
+
+      preferredLocation:
+        stored?.preferredLocation || user?.preferredLocation || "",
+
+      preferredWorkMode:
+        stored?.preferredWorkMode || user?.preferredWorkMode || "",
+    };
+
+    setProfile(mergedProfile);
+  }, [user?.email]);
+
+  /*
+   * ---------------------------------------------------------
+   * LOAD SAVED + APPLICATION DATA
+   * ---------------------------------------------------------
+   */
+
+  useEffect(() => {
+    setApplications(read(APPLICATIONS_KEY, []));
+    setSaved(read(SAVED_KEY, []));
+  }, []);
+
+  /*
+   * ---------------------------------------------------------
+   * LOAD ML RECOMMENDATIONS
+   * ---------------------------------------------------------
    *
-   * {
-   *   recommendations: [
-   *     {
-   *       id: 101,
-   *       title: "Frontend Developer Intern",
-   *       company: "ABC",
-   *       location: "Noida",
-   *       match_percentage: 92,
-   *       source_url: "https://..."
-   *     }
-   *   ]
-   * }
-   *
-   * The frontend does NOT calculate the match percentage.
+   * Frontend does NOT calculate matching.
+   * The ML/backend service provides match_percentage.
    */
 
   useEffect(() => {
@@ -105,7 +201,7 @@ export default function Dashboard() {
           : [];
 
         /*
-         * Only normalize the response.
+         * Normalize API response only.
          * No matching calculation happens here.
          */
 
@@ -132,7 +228,7 @@ export default function Dashboard() {
         }));
 
         /*
-         * Sort using the score already provided
+         * Sort only by the score already supplied
          * by the ML/backend service.
          */
 
@@ -141,9 +237,6 @@ export default function Dashboard() {
             Number(b.match_percentage || 0) - Number(a.match_percentage || 0),
         );
 
-        /*
-         * Dashboard only needs the top 3.
-         */
         setRecommendations(normalized.slice(0, 3));
       } catch (error) {
         console.error("Failed to load recommendations:", error);
@@ -167,39 +260,65 @@ export default function Dashboard() {
 
   /*
    * ---------------------------------------------------------
-   * Profile completion
+   * PROFILE COMPLETION
    * ---------------------------------------------------------
+   *
+   * Same fields as the corrected Profile page.
+   * GitHub / LinkedIn are intentionally NOT included.
    */
 
-  const completionFields = [
-    "fullName",
-    "email",
-    "phone",
-    "college",
-    "branch",
-    "cgpa",
-    "graduationYear",
-    "skills",
-    "interests",
-    "preferredDomain",
-    "preferredLocation",
-    "github",
-    "linkedin",
-  ];
+  const completionFields = useMemo(
+    () => [
+      "fullName",
+      "email",
+      "phone",
+      "college",
+      "degree",
+      "branch",
+      "cgpa",
+      "graduationYear",
+      "skills",
+      "interests",
+      "preferredJobField",
+      "preferredLocation",
+      "preferredWorkMode",
+    ],
+    [],
+  );
 
   const completion = useMemo(() => {
-    const completed = completionFields.filter((key) => {
-      const value = profile[key];
-
-      return Array.isArray(value) ? value.length > 0 : Boolean(value);
-    }).length;
+    const completed = completionFields.filter((key) =>
+      hasValue(profile[key]),
+    ).length;
 
     return Math.round((completed / completionFields.length) * 100);
-  }, [profile]);
+  }, [profile, completionFields]);
 
   /*
    * ---------------------------------------------------------
-   * Dashboard statistics
+   * CHECKLIST STATUS
+   * ---------------------------------------------------------
+   */
+
+  const educationContactComplete =
+    hasValue(profile.fullName) &&
+    hasValue(profile.email) &&
+    hasValue(profile.phone) &&
+    hasValue(profile.college) &&
+    hasValue(profile.degree) &&
+    hasValue(profile.branch);
+
+  const skillsInterestsComplete =
+    hasValue(profile.skills) && hasValue(profile.interests);
+
+  const careerComplete = hasValue(profile.preferredJobField);
+
+  const preferencesComplete =
+    hasValue(profile.preferredLocation) && hasValue(profile.preferredWorkMode);
+
+  /*
+   * ---------------------------------------------------------
+   * DASHBOARD STATISTICS
    * ---------------------------------------------------------
    */
 
@@ -289,6 +408,10 @@ export default function Dashboard() {
             ))}
           </div>
 
+          {/* =================================================
+              MAIN CONTENT
+          ================================================= */}
+
           <div className="row g-4 align-items-start">
             {/* =================================================
                 LEFT COLUMN
@@ -296,6 +419,7 @@ export default function Dashboard() {
 
             <div className="col-lg-8">
               {/* Recommendations */}
+
               <section className="dashboard-panel">
                 <div className="d-flex justify-content-between align-items-center mb-3">
                   <div>
@@ -335,6 +459,7 @@ export default function Dashboard() {
               </section>
 
               {/* Application Snapshot */}
+
               <section className="dashboard-panel mt-4">
                 <div className="d-flex justify-content-between align-items-center mb-3">
                   <div>
@@ -364,6 +489,7 @@ export default function Dashboard() {
 
             <div className="col-lg-4">
               {/* Profile Strength */}
+
               <section className="dashboard-panel">
                 <div className="d-flex align-items-center gap-2 mb-3">
                   <div className="mini-panel-icon">
@@ -395,24 +521,32 @@ export default function Dashboard() {
                 </div>
 
                 <ul className="dashboard-checklist list-unstyled mb-4">
-                  <li>
-                    <FaCheckCircle />
+                  <li className={educationContactComplete ? "" : "text-muted"}>
+                    <FaCheckCircle
+                      className={educationContactComplete ? "" : "opacity-50"}
+                    />
                     Education &amp; contact
                   </li>
 
-                  <li>
-                    <FaCheckCircle />
+                  <li className={skillsInterestsComplete ? "" : "text-muted"}>
+                    <FaCheckCircle
+                      className={skillsInterestsComplete ? "" : "opacity-50"}
+                    />
                     Skills &amp; interests
                   </li>
 
-                  <li>
-                    <FaCheckCircle />
+                  <li className={careerComplete ? "" : "text-muted"}>
+                    <FaCheckCircle
+                      className={careerComplete ? "" : "opacity-50"}
+                    />
                     Preferred career field
                   </li>
 
-                  <li>
-                    <FaCheckCircle />
-                    GitHub / LinkedIn
+                  <li className={preferencesComplete ? "" : "text-muted"}>
+                    <FaMapMarkerAlt
+                      className={preferencesComplete ? "" : "opacity-50"}
+                    />
+                    Location &amp; work mode
                   </li>
                 </ul>
 
@@ -422,6 +556,7 @@ export default function Dashboard() {
               </section>
 
               {/* Career Preferences */}
+
               <section className="dashboard-panel mt-4">
                 <div className="d-flex align-items-center gap-2 mb-3">
                   <div className="mini-panel-icon">
@@ -442,7 +577,7 @@ export default function Dashboard() {
                     <strong>Preferred Field</strong>
 
                     <div className="text-muted mt-1">
-                      {profile.preferredDomain || "Not selected yet"}
+                      {profile.preferredJobField || "Not selected yet"}
                     </div>
                   </div>
 
@@ -454,13 +589,20 @@ export default function Dashboard() {
                     </div>
                   </div>
 
+                  <div className="mb-3">
+                    <strong>Work Mode</strong>
+
+                    <div className="text-muted mt-1">
+                      {profile.preferredWorkMode || "Not selected yet"}
+                    </div>
+                  </div>
+
                   <div>
                     <strong>Interests</strong>
 
                     <div className="text-muted mt-1">
-                      {Array.isArray(profile.interests) &&
-                      profile.interests.length
-                        ? profile.interests.join(", ")
+                      {normalizeArray(profile.interests).length
+                        ? normalizeArray(profile.interests).join(", ")
                         : "No interests selected yet"}
                     </div>
                   </div>
@@ -502,9 +644,7 @@ function RecommendationRow({ item }) {
 
         <small className="text-muted">
           {item.company || "Company"}
-
           {" · "}
-
           {item.location || "Location"}
         </small>
       </div>

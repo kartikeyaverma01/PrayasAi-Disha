@@ -5,15 +5,21 @@ import {
   FaUser,
   FaEnvelope,
   FaLock,
+  FaEye,
+  FaEyeSlash,
   FaPhone,
   FaUniversity,
   FaArrowLeft,
+  FaArrowRight,
   FaBriefcase,
-  FaEye,
-  FaEyeSlash,
+  FaGraduationCap,
+  FaCode,
+  FaHeart,
+  FaMapMarkerAlt,
+  FaLaptopHouse,
 } from "react-icons/fa";
+
 import { useAuth } from "../context/AuthContext";
-import { DOMAIN_OPTIONS } from "../data/profile";
 
 const degrees = [
   "B.Tech",
@@ -25,59 +31,101 @@ const degrees = [
   "M.Tech",
   "MBA",
   "M.Sc",
-  "Other",
 ];
-const currentYear = new Date().getFullYear();
-const graduationYears = Array.from(
-  { length: 6 },
-  (_, i) => currentYear - 1 + i,
-);
 
-const SKILL_OPTIONS = [
+const branches = [
+  {
+    label: "Computer Science and Engineering",
+    value: "CSE",
+  },
+  {
+    label: "Information Technology",
+    value: "IT",
+  },
+  {
+    label: "Computer Science",
+    value: "CS",
+  },
+  {
+    label: "Artificial Intelligence and Machine Learning",
+    value: "AIML",
+  },
+  {
+    label: "Artificial Intelligence and Data Science",
+    value: "AIDS",
+  },
+  {
+    label: "Electronics and Communication Engineering",
+    value: "ECE",
+  },
+  {
+    label: "Electrical Engineering",
+    value: "EE",
+  },
+  {
+    label: "Mechanical Engineering",
+    value: "ME",
+  },
+  {
+    label: "Civil Engineering",
+    value: "CE",
+  },
+];
+
+const skills = [
+  "C",
+  "C++",
+  "Java",
+  "Python",
+  "JavaScript",
+  "SQL",
   "HTML",
   "CSS",
-  "JavaScript",
   "React",
-  "Python",
-  "Java",
-  "C++",
-  "SQL",
-  "FastAPI",
   "Node.js",
+  "Flask",
+  "FastAPI",
   "Git",
   "Data Analysis",
   "Machine Learning",
+  "Deep Learning",
   "Cloud",
   "UI/UX",
-  "Figma",
-  "Power BI",
   "MongoDB",
+  "Power BI",
 ];
 
-const INTEREST_OPTIONS = [
-  "Web Development",
+const jobFields = [
   "Software Development",
+  "Web Development",
+  "App Development",
   "Data Science",
-  "Artificial Intelligence",
+  "Data Analysis",
   "Machine Learning",
-  "Backend Development",
-  "Frontend Development",
+  "Artificial Intelligence",
   "Cloud Computing",
   "Cyber Security",
-  "Mobile Development",
   "UI/UX Design",
-  "Business & Analytics",
 ];
+
+const workModes = ["Remote", "Hybrid", "On-site"];
+
+const currentYear = new Date().getFullYear();
+
+const graduationYears = Array.from(
+  { length: 7 },
+  (_, i) => currentYear - 1 + i,
+);
 
 export default function Register() {
   const { register: registerUser } = useAuth();
   const navigate = useNavigate();
+
+  const [step, setStep] = useState(1);
   const [serverError, setServerError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [step, setStep] = useState(1);
-
   const {
     register,
     handleSubmit,
@@ -87,23 +135,28 @@ export default function Register() {
     formState: { errors },
   } = useForm({
     mode: "onBlur",
-    defaultValues: { skills: [], interests: [], preferredDomain: "" },
+    defaultValues: {
+      skills: [],
+    },
   });
 
   const password = watch("password");
-  const selectedSkills = watch("skills", []) || [];
-  const selectedInterests = watch("interests", []) || [];
-  const selectedDomain = watch("preferredDomain", "");
+  const selectedSkills = watch("skills") || [];
 
-  const toggleSelection = (field, value) => {
-    const current = watch(field, []) || [];
-    const next = current.includes(value)
-      ? current.filter((item) => item !== value)
-      : [...current, value];
-    setValue(field, next, { shouldDirty: true, shouldValidate: true });
+  const toggleSkill = (skill) => {
+    const currentSkills = watch("skills") || [];
+
+    const updatedSkills = currentSkills.includes(skill)
+      ? currentSkills.filter((item) => item !== skill)
+      : [...currentSkills, skill];
+
+    setValue("skills", updatedSkills, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
   };
 
-  const continueToPreferences = async () => {
+  const goToStep2 = async () => {
     const valid = await trigger([
       "fullName",
       "email",
@@ -113,26 +166,28 @@ export default function Register() {
       "college",
       "degree",
       "branch",
+      "cgpa",
       "graduationYear",
     ]);
-    if (valid) setStep(2);
+
+    if (valid) {
+      setStep(2);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const goToStep1 = () => {
+    setStep(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const onSubmit = async (data) => {
     setServerError("");
-    if (
-      !data.skills?.length ||
-      !data.interests?.length ||
-      !data.preferredDomain
-    ) {
-      setServerError(
-        "Please select at least one skill, one interest, and your preferred job field.",
-      );
-      return;
-    }
     setSubmitting(true);
+
     try {
       await registerUser(data);
+
       navigate("/dashboard", { replace: true });
     } catch (err) {
       setServerError(
@@ -147,43 +202,89 @@ export default function Register() {
     <div className="auth-page d-flex align-items-center py-5">
       <div className="container">
         <div className="row justify-content-center">
-          <div className="col-12 col-md-9 col-lg-7">
+          <div className="col-12 col-md-10 col-lg-8">
             <Link
               to="/"
               className="d-inline-flex align-items-center text-decoration-none text-muted mb-4 small"
             >
-              <FaArrowLeft className="me-2" /> Back to home
+              <FaArrowLeft className="me-2" />
+              Back to home
             </Link>
 
             <div className="card border-0 shadow-sm auth-card">
               <div className="card-body p-4 p-md-5">
+                {/* Brand */}
                 <div className="d-flex align-items-center gap-2 mb-4">
                   <span className="brand-mark d-inline-flex align-items-center justify-content-center">
                     <FaBriefcase />
                   </span>
+
                   <span className="fw-bold">
-                    PrayasAI<span className="text-primary">Disha</span>
+                    PrayasAI
+                    <span className="text-primary">Disha</span>
                   </span>
                 </div>
 
-                <h1 className="h3 fw-bold mb-1">Create your account</h1>
-                <p className="text-muted mb-4">
-                  Tell us about yourself so PrayasAI Disha can personalize your
-                  internship matches.
-                </p>
+                {/* Heading */}
+                <div className="mb-4">
+                  <h1 className="h3 fw-bold mb-1">Create your account</h1>
 
-                <div className="d-flex align-items-center gap-2 mb-4 small">
-                  <span
-                    className={`badge rounded-pill ${step === 1 ? "text-bg-primary" : "text-bg-light text-dark"}`}
-                  >
-                    1. Account & Education
-                  </span>
-                  <span className="text-muted">→</span>
-                  <span
-                    className={`badge rounded-pill ${step === 2 ? "text-bg-primary" : "text-bg-light text-dark"}`}
-                  >
-                    2. Skills & Career Preferences
-                  </span>
+                  <p className="text-muted mb-0">
+                    Build your profile and get AI-matched internships
+                  </p>
+                </div>
+
+                {/* Step indicator */}
+                <div className="d-flex align-items-center mb-4">
+                  <div className="d-flex align-items-center">
+                    <span
+                      className={`rounded-circle d-inline-flex align-items-center justify-content-center ${
+                        step >= 1
+                          ? "bg-primary text-white"
+                          : "bg-light text-muted"
+                      }`}
+                      style={{
+                        width: "34px",
+                        height: "34px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      1
+                    </span>
+
+                    <span className="ms-2 small fw-semibold">
+                      Account & Academic
+                    </span>
+                  </div>
+
+                  <div
+                    className="flex-grow-1 mx-3"
+                    style={{
+                      height: "2px",
+                      background: step === 2 ? "var(--bs-primary)" : "#e9ecef",
+                    }}
+                  />
+
+                  <div className="d-flex align-items-center">
+                    <span
+                      className={`rounded-circle d-inline-flex align-items-center justify-content-center ${
+                        step === 2
+                          ? "bg-primary text-white"
+                          : "bg-light text-muted"
+                      }`}
+                      style={{
+                        width: "34px",
+                        height: "34px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      2
+                    </span>
+
+                    <span className="ms-2 small fw-semibold">
+                      Skills & Preferences
+                    </span>
+                  </div>
                 </div>
 
                 {serverError && (
@@ -193,412 +294,645 @@ export default function Register() {
                 )}
 
                 <form onSubmit={handleSubmit(onSubmit)} noValidate>
+                  {/* =====================================================
+                      STEP 1
+                  ====================================================== */}
                   {step === 1 && (
-                    <div className="row g-3">
-                      <div className="col-12 col-md-6">
-                        <label htmlFor="fullName" className="form-label">
-                          Full Name
-                        </label>
-                        <div className="input-group">
-                          <span className="input-group-text bg-light">
-                            <FaUser />
-                          </span>
-                          <input
-                            id="fullName"
-                            autoComplete="name"
-                            className={`form-control ${errors.fullName ? "is-invalid" : ""}`}
-                            placeholder="Your full name"
-                            {...register("fullName", {
-                              required: "Full name is required",
-                              minLength: {
-                                value: 3,
-                                message: "Enter at least 3 characters",
-                              },
-                            })}
-                          />
-                          {errors.fullName && (
-                            <div className="invalid-feedback">
-                              {errors.fullName.message}
-                            </div>
-                          )}
-                        </div>
+                    <>
+                      <div className="d-flex align-items-center gap-2 mb-3">
+                        <FaGraduationCap className="text-primary" />
+                        <h2 className="h5 fw-bold mb-0">
+                          Account & Academic Details
+                        </h2>
                       </div>
 
-                      <div className="col-12 col-md-6">
-                        <label htmlFor="email" className="form-label">
-                          Email
-                        </label>
-                        <div className="input-group">
-                          <span className="input-group-text bg-light">
-                            <FaEnvelope />
-                          </span>
-                          <input
-                            id="email"
-                            type="email"
-                            autoComplete="email"
-                            className={`form-control ${errors.email ? "is-invalid" : ""}`}
-                            placeholder="you@example.com"
-                            {...register("email", {
-                              required: "Email is required",
-                              pattern: {
-                                value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                                message: "Enter a valid email",
-                              },
-                            })}
-                          />
-                          {errors.email && (
-                            <div className="invalid-feedback">
-                              {errors.email.message}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                      <div className="row g-3">
+                        {/* Full Name */}
+                        <div className="col-12 col-md-6">
+                          <label htmlFor="fullName" className="form-label">
+                            Full Name
+                          </label>
 
-                      <div className="col-12 col-md-6">
-                        <label htmlFor="password" className="form-label">
-                          Password
-                        </label>
-                        <div className="input-group">
-                          <span className="input-group-text bg-light">
-                            <FaLock />
-                          </span>
-                          <input
-                            id="password"
-                            type={showPassword ? "text" : "password"}
-                            autoComplete="new-password"
-                            className={`form-control ${errors.password ? "is-invalid" : ""}`}
-                            placeholder="At least 8 characters"
-                            {...register("password", {
-                              required: "Password is required",
-                              minLength: {
-                                value: 8,
-                                message:
-                                  "Password must be at least 8 characters",
-                              },
-                              pattern: {
-                                value: /^(?=.*[A-Za-z])(?=.*\d).+$/,
-                                message:
-                                  "Include at least one letter and one number",
-                              },
-                            })}
-                          />
-                          <button
-                            type="button"
-                            className="password-toggle"
-                            aria-label={
-                              showPassword ? "Hide password" : "Show password"
-                            }
-                            onClick={() => setShowPassword((value) => !value)}
+                          <div className="input-group">
+                            <span className="input-group-text bg-light">
+                              <FaUser />
+                            </span>
+
+                            <input
+                              id="fullName"
+                              autoComplete="name"
+                              className={`form-control ${
+                                errors.fullName ? "is-invalid" : ""
+                              }`}
+                              placeholder="Your full name"
+                              {...register("fullName", {
+                                required: "Full name is required",
+                                minLength: {
+                                  value: 3,
+                                  message: "Enter at least 3 characters",
+                                },
+                              })}
+                            />
+
+                            {errors.fullName && (
+                              <div className="invalid-feedback">
+                                {errors.fullName.message}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Email */}
+                        <div className="col-12 col-md-6">
+                          <label htmlFor="email" className="form-label">
+                            Email
+                          </label>
+
+                          <div className="input-group">
+                            <span className="input-group-text bg-light">
+                              <FaEnvelope />
+                            </span>
+
+                            <input
+                              id="email"
+                              type="email"
+                              autoComplete="email"
+                              className={`form-control ${
+                                errors.email ? "is-invalid" : ""
+                              }`}
+                              placeholder="you@example.com"
+                              {...register("email", {
+                                required: "Email is required",
+                                pattern: {
+                                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                                  message: "Enter a valid email",
+                                },
+                              })}
+                            />
+
+                            {errors.email && (
+                              <div className="invalid-feedback">
+                                {errors.email.message}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Password */}
+                        <div className="col-12 col-md-6">
+                          <label htmlFor="password" className="form-label">
+                            Password
+                          </label>
+
+                          <div className="input-group">
+                            <span className="input-group-text bg-light">
+                              <FaLock />
+                            </span>
+
+                            <input
+                              id="password"
+                              type={showPassword ? "text" : "password"}
+                              autoComplete="new-password"
+                              className={`form-control ${
+                                errors.password ? "is-invalid" : ""
+                              }`}
+                              placeholder="At least 8 characters"
+                              {...register("password", {
+                                required: "Password is required",
+                                minLength: {
+                                  value: 8,
+                                  message:
+                                    "Password must be at least 8 characters",
+                                },
+                                pattern: {
+                                  value: /^(?=.*[A-Za-z])(?=.*\d).+$/,
+                                  message:
+                                    "Include at least one letter and one number",
+                                },
+                              })}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-light border"
+                              onClick={() => setShowPassword((value) => !value)}
+                              aria-label={
+                                showPassword ? "Hide password" : "Show password"
+                              }
+                            >
+                              {showPassword ? <FaEyeSlash /> : <FaEye />}
+                            </button>
+
+                            {errors.password && (
+                              <div className="invalid-feedback">
+                                {errors.password.message}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Confirm Password */}
+                        <div className="col-12 col-md-6">
+                          <label
+                            htmlFor="confirmPassword"
+                            className="form-label"
                           >
-                            {showPassword ? <FaEyeSlash /> : <FaEye />}
-                          </button>
-                          {errors.password && (
-                            <div className="invalid-feedback">
-                              {errors.password.message}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                            Confirm Password
+                          </label>
 
-                      <div className="col-12 col-md-6">
-                        <label htmlFor="confirmPassword" className="form-label">
-                          Confirm Password
-                        </label>
-                        <div className="input-group">
-                          <span className="input-group-text bg-light">
-                            <FaLock />
-                          </span>
-                          <input
-                            id="confirmPassword"
-                            type={showConfirmPassword ? "text" : "password"}
-                            autoComplete="new-password"
-                            className={`form-control ${errors.confirmPassword ? "is-invalid" : ""}`}
-                            placeholder="Re-enter your password"
-                            {...register("confirmPassword", {
-                              required: "Please confirm your password",
-                              validate: (value) =>
-                                value === password || "Passwords do not match",
+                          <div className="input-group">
+                            <span className="input-group-text bg-light">
+                              <FaLock />
+                            </span>
+
+                            <input
+                              id="confirmPassword"
+                              type={showConfirmPassword ? "text" : "password"}
+                              autoComplete="new-password"
+                              className={`form-control ${
+                                errors.confirmPassword ? "is-invalid" : ""
+                              }`}
+                              placeholder="Re-enter your password"
+                              {...register("confirmPassword", {
+                                required: "Please confirm your password",
+                                validate: (value) =>
+                                  value === password ||
+                                  "Passwords do not match",
+                              })}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-light border"
+                              onClick={() =>
+                                setShowConfirmPassword((value) => !value)
+                              }
+                              aria-label={
+                                showConfirmPassword
+                                  ? "Hide confirm password"
+                                  : "Show confirm password"
+                              }
+                            >
+                              {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+                            </button>
+                            
+                            {errors.confirmPassword && (
+                              <div className="invalid-feedback">
+                                {errors.confirmPassword.message}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Mobile */}
+                        <div className="col-12 col-md-6">
+                          <label htmlFor="mobile" className="form-label">
+                            Mobile Number
+                          </label>
+
+                          <div className="input-group">
+                            <span className="input-group-text bg-light">
+                              <FaPhone />
+                            </span>
+
+                            <input
+                              id="mobile"
+                              autoComplete="tel"
+                              className={`form-control ${
+                                errors.mobile ? "is-invalid" : ""
+                              }`}
+                              placeholder="10-digit mobile number"
+                              {...register("mobile", {
+                                required: "Mobile number is required",
+                                pattern: {
+                                  value: /^[6-9]\d{9}$/,
+                                  message:
+                                    "Enter a valid 10-digit mobile number",
+                                },
+                              })}
+                            />
+
+                            {errors.mobile && (
+                              <div className="invalid-feedback">
+                                {errors.mobile.message}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* College */}
+                        <div className="col-12 col-md-6">
+                          <label htmlFor="college" className="form-label">
+                            College
+                          </label>
+
+                          <div className="input-group">
+                            <span className="input-group-text bg-light">
+                              <FaUniversity />
+                            </span>
+
+                            <input
+                              id="college"
+                              className={`form-control ${
+                                errors.college ? "is-invalid" : ""
+                              }`}
+                              placeholder="Your college / university"
+                              {...register("college", {
+                                required: "College is required",
+                              })}
+                            />
+
+                            {errors.college && (
+                              <div className="invalid-feedback">
+                                {errors.college.message}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Degree */}
+                        <div className="col-12 col-md-4">
+                          <label htmlFor="degree" className="form-label">
+                            Degree
+                          </label>
+
+                          <select
+                            id="degree"
+                            className={`form-select ${
+                              errors.degree ? "is-invalid" : ""
+                            }`}
+                            defaultValue=""
+                            {...register("degree", {
+                              required: "Please select your degree",
                             })}
-                          />
-                          <button
-                            type="button"
-                            className="password-toggle"
-                            aria-label={
-                              showConfirmPassword
-                                ? "Hide password"
-                                : "Show password"
-                            }
-                            onClick={() =>
-                              setShowConfirmPassword((value) => !value)
-                            }
                           >
-                            {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
-                          </button>
-                          {errors.confirmPassword && (
+                            <option value="" disabled>
+                              Select degree
+                            </option>
+
+                            {degrees.map((degree) => (
+                              <option key={degree} value={degree}>
+                                {degree}
+                              </option>
+                            ))}
+                          </select>
+
+                          {errors.degree && (
                             <div className="invalid-feedback">
-                              {errors.confirmPassword.message}
+                              {errors.degree.message}
                             </div>
                           )}
                         </div>
-                      </div>
 
-                      <div className="col-12 col-md-6">
-                        <label htmlFor="mobile" className="form-label">
-                          Mobile Number
-                        </label>
-                        <div className="input-group">
-                          <span className="input-group-text bg-light">
-                            <FaPhone />
-                          </span>
+                        {/* Branch */}
+                        <div className="col-12 col-md-8">
+                          <label htmlFor="branch" className="form-label">
+                            Branch
+                          </label>
+
+                          <select
+                            id="branch"
+                            className={`form-select ${
+                              errors.branch ? "is-invalid" : ""
+                            }`}
+                            defaultValue=""
+                            {...register("branch", {
+                              required: "Please select your branch",
+                            })}
+                          >
+                            <option value="" disabled>
+                              Select branch
+                            </option>
+
+                            {branches.map((branch) => (
+                              <option key={branch.value} value={branch.value}>
+                                {branch.label}
+                              </option>
+                            ))}
+                          </select>
+
+                          {errors.branch && (
+                            <div className="invalid-feedback">
+                              {errors.branch.message}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* CGPA */}
+                        <div className="col-12 col-md-6">
+                          <label htmlFor="cgpa" className="form-label">
+                            CGPA
+                          </label>
+
                           <input
-                            id="mobile"
-                            autoComplete="tel"
-                            className={`form-control ${errors.mobile ? "is-invalid" : ""}`}
-                            placeholder="10-digit mobile number"
-                            {...register("mobile", {
-                              required: "Mobile number is required",
-                              pattern: {
-                                value: /^[6-9]\d{9}$/,
-                                message: "Enter a valid 10-digit mobile number",
+                            id="cgpa"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="10"
+                            className={`form-control ${
+                              errors.cgpa ? "is-invalid" : ""
+                            }`}
+                            placeholder="e.g. 8.25"
+                            {...register("cgpa", {
+                              required: "CGPA is required",
+                              min: {
+                                value: 0,
+                                message: "CGPA cannot be below 0",
+                              },
+                              max: {
+                                value: 10,
+                                message: "CGPA cannot exceed 10",
                               },
                             })}
                           />
-                          {errors.mobile && (
+
+                          {errors.cgpa && (
                             <div className="invalid-feedback">
-                              {errors.mobile.message}
+                              {errors.cgpa.message}
                             </div>
                           )}
                         </div>
-                      </div>
 
-                      <div className="col-12 col-md-6">
-                        <label htmlFor="college" className="form-label">
-                          College / University
-                        </label>
-                        <div className="input-group">
-                          <span className="input-group-text bg-light">
-                            <FaUniversity />
-                          </span>
-                          <input
-                            id="college"
-                            className={`form-control ${errors.college ? "is-invalid" : ""}`}
-                            placeholder="Your institution"
-                            {...register("college", {
-                              required: "College/University is required",
+                        {/* Graduation Year */}
+                        <div className="col-12 col-md-6">
+                          <label
+                            htmlFor="graduationYear"
+                            className="form-label"
+                          >
+                            Graduation Year
+                          </label>
+
+                          <select
+                            id="graduationYear"
+                            className={`form-select ${
+                              errors.graduationYear ? "is-invalid" : ""
+                            }`}
+                            defaultValue=""
+                            {...register("graduationYear", {
+                              required: "Please select graduation year",
                             })}
-                          />
-                          {errors.college && (
+                          >
+                            <option value="" disabled>
+                              Select year
+                            </option>
+
+                            {graduationYears.map((year) => (
+                              <option key={year} value={year}>
+                                {year}
+                              </option>
+                            ))}
+                          </select>
+
+                          {errors.graduationYear && (
                             <div className="invalid-feedback">
-                              {errors.college.message}
+                              {errors.graduationYear.message}
                             </div>
                           )}
                         </div>
                       </div>
 
-                      <div className="col-12 col-md-4">
-                        <label htmlFor="degree" className="form-label">
-                          Degree
-                        </label>
-                        <select
-                          id="degree"
-                          className={`form-select ${errors.degree ? "is-invalid" : ""}`}
-                          defaultValue=""
-                          {...register("degree", {
-                            required: "Select your degree",
-                          })}
-                        >
-                          <option value="" disabled>
-                            Select degree
-                          </option>
-                          {degrees.map((degree) => (
-                            <option key={degree} value={degree}>
-                              {degree}
-                            </option>
-                          ))}
-                        </select>
-                        {errors.degree && (
-                          <div className="invalid-feedback">
-                            {errors.degree.message}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="col-12 col-md-4">
-                        <label htmlFor="branch" className="form-label">
-                          Branch
-                        </label>
-                        <input
-                          id="branch"
-                          className={`form-control ${errors.branch ? "is-invalid" : ""}`}
-                          placeholder="e.g. Computer Science"
-                          {...register("branch", {
-                            required: "Branch is required",
-                          })}
-                        />
-                        {errors.branch && (
-                          <div className="invalid-feedback">
-                            {errors.branch.message}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="col-12 col-md-4">
-                        <label htmlFor="graduationYear" className="form-label">
-                          Graduation Year
-                        </label>
-                        <select
-                          id="graduationYear"
-                          className={`form-select ${errors.graduationYear ? "is-invalid" : ""}`}
-                          defaultValue=""
-                          {...register("graduationYear", {
-                            required: "Select graduation year",
-                          })}
-                        >
-                          <option value="" disabled>
-                            Select year
-                          </option>
-                          {graduationYears.map((year) => (
-                            <option key={year} value={year}>
-                              {year}
-                            </option>
-                          ))}
-                        </select>
-                        {errors.graduationYear && (
-                          <div className="invalid-feedback">
-                            {errors.graduationYear.message}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                      <button
+                        type="button"
+                        className="btn btn-primary w-100 py-2 fw-semibold mt-4"
+                        onClick={goToStep2}
+                      >
+                        Continue
+                        <FaArrowRight className="ms-2" />
+                      </button>
+                    </>
                   )}
 
+                  {/* =====================================================
+                      STEP 2
+                  ====================================================== */}
                   {step === 2 && (
-                    <div>
-                      <div className="dashboard-panel border-0 bg-light-subtle mb-4 p-3 p-md-4">
-                        <h2 className="h5 fw-bold mb-1">Your skills</h2>
-                        <p className="small text-muted mb-3">
-                          Select the skills you already have. You can add more
-                          later from your Profile.
-                        </p>
-                        <div className="d-flex flex-wrap gap-2">
-                          {SKILL_OPTIONS.map((skill) => {
-                            const selected = selectedSkills.includes(skill);
-                            return (
-                              <button
-                                key={skill}
-                                type="button"
-                                className={`btn btn-sm rounded-pill ${selected ? "btn-primary" : "btn-outline-secondary"}`}
-                                onClick={() => toggleSelection("skills", skill)}
-                              >
-                                {selected ? "✓ " : "+ "}
-                                {skill}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <input type="hidden" {...register("skills")} />
+                    <>
+                      <div className="d-flex align-items-center gap-2 mb-3">
+                        <FaCode className="text-primary" />
+                        <h2 className="h5 fw-bold mb-0">
+                          Skills & Preferences
+                        </h2>
                       </div>
 
-                      <div className="dashboard-panel border-0 bg-light-subtle mb-4 p-3 p-md-4">
-                        <h2 className="h5 fw-bold mb-1">Your interests</h2>
-                        <p className="small text-muted mb-3">
-                          Choose the areas you would like to explore through
-                          internships.
-                        </p>
-                        <div className="d-flex flex-wrap gap-2">
-                          {INTEREST_OPTIONS.map((interest) => {
-                            const selected =
-                              selectedInterests.includes(interest);
-                            return (
-                              <button
-                                key={interest}
-                                type="button"
-                                className={`btn btn-sm rounded-pill ${selected ? "btn-primary" : "btn-outline-secondary"}`}
-                                onClick={() =>
-                                  toggleSelection("interests", interest)
-                                }
-                              >
-                                {selected ? "✓ " : "+ "}
-                                {interest}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <input type="hidden" {...register("interests")} />
-                      </div>
+                      <div className="row g-3">
+                        {/* Skills */}
+                        <div className="col-12">
+                          <label className="form-label">Skills</label>
 
-                      <div className="dashboard-panel border-0 bg-light-subtle p-3 p-md-4">
-                        <label
-                          htmlFor="preferredDomain"
-                          className="form-label fw-semibold"
-                        >
-                          What field do you want to work in?
-                        </label>
-                        <p className="small text-muted">
-                          This helps us prioritize relevant internships and
-                          recommendations.
-                        </p>
-                        <select
-                          id="preferredDomain"
-                          className={`form-select ${!selectedDomain && serverError ? "is-invalid" : ""}`}
-                          {...register("preferredDomain", {
-                            required: "Please select your preferred job field",
-                          })}
-                        >
-                          <option value="">
-                            Select your preferred job field
-                          </option>
-                          {DOMAIN_OPTIONS.map((domain) => (
-                            <option key={domain} value={domain}>
-                              {domain}
-                            </option>
-                          ))}
-                        </select>
-                        {errors.preferredDomain && (
-                          <div className="invalid-feedback">
-                            {errors.preferredDomain.message}
+                          <p className="small text-muted mb-2">
+                            Select all the skills you currently have.
+                          </p>
+
+                          {/* Hidden registered field */}
+                          <input
+                            type="hidden"
+                            {...register("skills", {
+                              validate: (value) =>
+                                value?.length > 0 ||
+                                "Select at least one skill",
+                            })}
+                          />
+
+                          <div className="d-flex flex-wrap gap-2">
+                            {skills.map((skill) => {
+                              const selected = selectedSkills.includes(skill);
+
+                              return (
+                                <button
+                                  key={skill}
+                                  type="button"
+                                  className={`btn btn-sm ${
+                                    selected
+                                      ? "btn-primary"
+                                      : "btn-outline-secondary"
+                                  }`}
+                                  onClick={() => toggleSkill(skill)}
+                                >
+                                  {skill}
+                                </button>
+                              );
+                            })}
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
 
-                  <div className="d-flex gap-2 mt-4">
-                    {step === 2 && (
-                      <button
-                        type="button"
-                        className="btn btn-outline-secondary flex-grow-1 py-2 fw-semibold"
-                        onClick={() => setStep(1)}
-                        disabled={submitting}
-                      >
-                        Back
-                      </button>
-                    )}
-                    {step === 1 ? (
-                      <button
-                        type="button"
-                        className="btn btn-primary flex-grow-1 py-2 fw-semibold"
-                        onClick={continueToPreferences}
-                      >
-                        Continue to Preferences →
-                      </button>
-                    ) : (
-                      <button
-                        type="submit"
-                        className="btn btn-primary flex-grow-1 py-2 fw-semibold"
-                        disabled={submitting}
-                      >
-                        {submitting ? (
-                          <>
-                            <span className="spinner-border spinner-border-sm me-2" />
-                            Creating account...
-                          </>
-                        ) : (
-                          "Create Account"
-                        )}
-                      </button>
-                    )}
-                  </div>
+                          {errors.skills && (
+                            <div className="text-danger small mt-2">
+                              {errors.skills.message}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Interests */}
+                        <div className="col-12">
+                          <label htmlFor="interests" className="form-label">
+                            Interests
+                          </label>
+
+                          <div className="input-group">
+                            <span className="input-group-text bg-light">
+                              <FaHeart />
+                            </span>
+
+                            <input
+                              id="interests"
+                              className={`form-control ${
+                                errors.interests ? "is-invalid" : ""
+                              }`}
+                              placeholder="e.g. Web development, AI, Data Science"
+                              {...register("interests", {
+                                required: "Interests are required",
+                              })}
+                            />
+
+                            {errors.interests && (
+                              <div className="invalid-feedback">
+                                {errors.interests.message}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Preferred Job Field */}
+                        <div className="col-12 col-md-6">
+                          <label
+                            htmlFor="preferredJobField"
+                            className="form-label"
+                          >
+                            Preferred Job Field
+                          </label>
+
+                          <select
+                            id="preferredJobField"
+                            className={`form-select ${
+                              errors.preferredJobField ? "is-invalid" : ""
+                            }`}
+                            defaultValue=""
+                            {...register("preferredJobField", {
+                              required:
+                                "Please select your preferred job field",
+                            })}
+                          >
+                            <option value="" disabled>
+                              Select job field
+                            </option>
+
+                            {jobFields.map((field) => (
+                              <option key={field} value={field}>
+                                {field}
+                              </option>
+                            ))}
+                          </select>
+
+                          {errors.preferredJobField && (
+                            <div className="invalid-feedback">
+                              {errors.preferredJobField.message}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Preferred Location */}
+                        <div className="col-12 col-md-6">
+                          <label
+                            htmlFor="preferredLocation"
+                            className="form-label"
+                          >
+                            Preferred Location
+                          </label>
+
+                          <div className="input-group">
+                            <span className="input-group-text bg-light">
+                              <FaMapMarkerAlt />
+                            </span>
+
+                            <input
+                              id="preferredLocation"
+                              className={`form-control ${
+                                errors.preferredLocation ? "is-invalid" : ""
+                              }`}
+                              placeholder="e.g. Delhi, Noida, Bangalore"
+                              {...register("preferredLocation", {
+                                required: "Preferred location is required",
+                              })}
+                            />
+
+                            {errors.preferredLocation && (
+                              <div className="invalid-feedback">
+                                {errors.preferredLocation.message}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Preferred Work Mode */}
+                        <div className="col-12">
+                          <label
+                            htmlFor="preferredWorkMode"
+                            className="form-label"
+                          >
+                            Preferred Work Mode
+                          </label>
+
+                          <div className="input-group">
+                            <span className="input-group-text bg-light">
+                              <FaLaptopHouse />
+                            </span>
+
+                            <select
+                              id="preferredWorkMode"
+                              className={`form-select ${
+                                errors.preferredWorkMode ? "is-invalid" : ""
+                              }`}
+                              defaultValue=""
+                              {...register("preferredWorkMode", {
+                                required:
+                                  "Please select your preferred work mode",
+                              })}
+                            >
+                              <option value="" disabled>
+                                Select work mode
+                              </option>
+
+                              {workModes.map((mode) => (
+                                <option key={mode} value={mode}>
+                                  {mode}
+                                </option>
+                              ))}
+                            </select>
+
+                            {errors.preferredWorkMode && (
+                              <div className="invalid-feedback">
+                                {errors.preferredWorkMode.message}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="d-flex gap-3 mt-4">
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary flex-grow-1 py-2 fw-semibold"
+                          onClick={goToStep1}
+                        >
+                          <FaArrowLeft className="me-2" />
+                          Back
+                        </button>
+
+                        <button
+                          type="submit"
+                          className="btn btn-primary flex-grow-1 py-2 fw-semibold"
+                          disabled={submitting}
+                        >
+                          {submitting ? (
+                            <>
+                              <span className="spinner-border spinner-border-sm me-2" />
+                              Creating account...
+                            </>
+                          ) : (
+                            "Create Account"
+                          )}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </form>
 
                 <p className="text-center text-muted mt-4 mb-0 small">

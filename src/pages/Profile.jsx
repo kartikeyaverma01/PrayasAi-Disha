@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+
 import {
   FaUserCircle,
   FaGraduationCap,
-  FaGithub,
-  FaLinkedin,
-  FaLink,
   FaPen,
   FaSave,
   FaTimes,
@@ -16,71 +14,259 @@ import {
 
 import Navbar from "../components/layout/Navbar";
 import Footer from "../components/layout/Footer";
+
 import { useAuth } from "../context/AuthContext";
 
-import {
-  defaultProfile,
-  PROFILE_COMPLETION_FIELDS,
-  DOMAIN_OPTIONS,
-} from "../data/profile";
+import { defaultProfile, DOMAIN_OPTIONS } from "../data/profile";
+
+/* =========================================================
+   STORAGE
+========================================================= */
 
 const STORAGE_PREFIX = "prayasai_profile_data_";
 
 const getStorageKey = (authUser) =>
   `${STORAGE_PREFIX}${String(authUser?.email || "guest").toLowerCase()}`;
 
+/* =========================================================
+   OPTIONS
+========================================================= */
+
+const JOB_FIELD_OPTIONS = [
+  "Software Development",
+  "Web Development",
+  "App Development",
+  "Data Science",
+  "Data Analysis",
+  "Machine Learning",
+  "Artificial Intelligence",
+  "Cloud Computing",
+  "Cyber Security",
+  "UI/UX Design",
+];
+
+const DOMAIN_FIELD_OPTIONS = Array.from(
+  new Set([
+    ...(Array.isArray(DOMAIN_OPTIONS) ? DOMAIN_OPTIONS : []),
+
+    ...JOB_FIELD_OPTIONS,
+  ]),
+);
+
+/* =========================================================
+   PROFILE FIELDS USED FOR COMPLETION
+========================================================= */
+
+const PROFILE_FIELDS = [
+  "fullName",
+  "email",
+  "phone",
+  "college",
+  "degree",
+  "branch",
+  "cgpa",
+  "graduationYear",
+  "skills",
+  "interests",
+  "preferredJobField",
+  "preferredLocation",
+  "preferredWorkMode",
+];
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function normalizeInterests(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+/* =========================================================
+   LOAD PROFILE
+========================================================= */
+
 function loadProfile(authUser) {
+  let stored = {};
+
   try {
     const raw = localStorage.getItem(getStorageKey(authUser));
 
     if (raw) {
-      return JSON.parse(raw);
+      stored = JSON.parse(raw) || {};
     }
   } catch {
-    // Ignore corrupted storage and use defaults.
+    stored = {};
   }
+
+  /* -------------------------------------------------------
+     INTERESTS
+  ------------------------------------------------------- */
+
+  const authInterests = normalizeInterests(authUser?.interests);
+
+  const storedInterests = normalizeInterests(stored?.interests);
+
+  const interests =
+    storedInterests.length > 0 ? storedInterests : authInterests;
+
+  /* -------------------------------------------------------
+     PREFERRED JOB FIELD
+  ------------------------------------------------------- */
+
+  const preferredJobField =
+    stored?.preferredJobField ||
+    stored?.preferredDomain ||
+    authUser?.preferredJobField ||
+    authUser?.preferredDomain ||
+    "";
+
+  /* -------------------------------------------------------
+     RETURN COMPLETE PROFILE
+  ------------------------------------------------------- */
 
   return {
     ...defaultProfile,
-    fullName: authUser?.fullName || "",
-    email: authUser?.email || "",
-    phone: authUser?.mobile || "",
-    college: authUser?.college || "",
-    branch: authUser?.branch || "",
-    graduationYear: authUser?.graduationYear
-      ? String(authUser.graduationYear)
-      : "",
+    ...stored,
+
+    /* Personal Information */
+
+    fullName: stored?.fullName || authUser?.fullName || "",
+
+    email: stored?.email || authUser?.email || "",
+
+    phone: stored?.phone || authUser?.mobile || authUser?.phone || "",
+
+    /* Academic Information */
+
+    college: stored?.college || authUser?.college || "",
+
+    degree: stored?.degree || authUser?.degree || "",
+
+    branch: stored?.branch || authUser?.branch || "",
+
+    cgpa: stored?.cgpa ?? authUser?.cgpa ?? "",
+
+    graduationYear:
+      stored?.graduationYear ||
+      (authUser?.graduationYear ? String(authUser.graduationYear) : ""),
+
+    /* Skills */
+
+    skills:
+      Array.isArray(stored?.skills) && stored.skills.length > 0
+        ? stored.skills
+        : Array.isArray(authUser?.skills)
+          ? authUser.skills
+          : [],
+
+    /* Interests */
+
+    interests,
+
+    /* Career Preferences */
+
+    preferredJobField,
+
+    // Keep this for compatibility with older parts
+    // of the application.
+    preferredDomain: preferredJobField,
+
+    preferredLocation:
+      stored?.preferredLocation || authUser?.preferredLocation || "",
+
+    preferredWorkMode:
+      stored?.preferredWorkMode || authUser?.preferredWorkMode || "",
   };
 }
 
+/* =========================================================
+   COMPLETION
+========================================================= */
+
 function computeCompletion(profile) {
-  const filled = PROFILE_COMPLETION_FIELDS.filter((field) => {
+  const filled = PROFILE_FIELDS.filter((field) => {
     const value = profile[field];
 
-    return Array.isArray(value) ? value.length > 0 : Boolean(value);
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+
+    return Boolean(
+      value !== null && value !== undefined && String(value).trim() !== "",
+    );
   });
 
-  return Math.round((filled.length / PROFILE_COMPLETION_FIELDS.length) * 100);
+  return Math.round((filled.length / PROFILE_FIELDS.length) * 100);
 }
+
+/* =========================================================
+   COMPONENT
+========================================================= */
 
 export default function Profile() {
   const { user } = useAuth();
 
+  /* -------------------------------------------------------
+     STATE
+  ------------------------------------------------------- */
+
   const [profile, setProfile] = useState(() => loadProfile(user));
 
+  const [draft, setDraft] = useState(() => loadProfile(user));
+
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(profile);
 
   const [showSuccess, setShowSuccess] = useState(false);
 
   const [skillInput, setSkillInput] = useState("");
+
   const [interestInput, setInterestInput] = useState("");
 
+  /* -------------------------------------------------------
+     RELOAD PROFILE WHEN USER CHANGES
+  ------------------------------------------------------- */
+
   useEffect(() => {
+    if (!user?.email) return;
+
+    const loadedProfile = loadProfile(user);
+
+    setProfile(loadedProfile);
+    setDraft(loadedProfile);
+    setEditing(false);
+    setShowSuccess(false);
+  }, [user?.email]);
+
+  /* -------------------------------------------------------
+     SAVE PROFILE
+  ------------------------------------------------------- */
+
+  useEffect(() => {
+    if (!user?.email) return;
+
     localStorage.setItem(getStorageKey(user), JSON.stringify(profile));
-  }, [user, profile]);
+  }, [user?.email, profile]);
+
+  /* -------------------------------------------------------
+     COMPLETION
+  ------------------------------------------------------- */
 
   const completion = useMemo(() => computeCompletion(profile), [profile]);
+
+  /* =======================================================
+     EDITING
+  ======================================================= */
 
   const startEditing = () => {
     setDraft(profile);
@@ -95,625 +281,813 @@ export default function Profile() {
     setInterestInput("");
   };
 
-  const saveChanges = (e) => {
-    e.preventDefault();
+  const saveChanges = (event) => {
+    event.preventDefault();
 
-    setProfile(draft);
+    const cleanedProfile = {
+      ...draft,
+
+      interests: normalizeInterests(draft.interests),
+
+      skills: Array.isArray(draft.skills) ? draft.skills : [],
+
+      preferredJobField: draft.preferredJobField || draft.preferredDomain || "",
+
+      preferredDomain: draft.preferredJobField || draft.preferredDomain || "",
+    };
+
+    setProfile(cleanedProfile);
+    setDraft(cleanedProfile);
+
     setEditing(false);
     setShowSuccess(true);
+
+    setSkillInput("");
+    setInterestInput("");
   };
 
   const updateDraft = (field, value) => {
-    setDraft((prev) => ({
-      ...prev,
+    setDraft((previous) => ({
+      ...previous,
       [field]: value,
     }));
   };
 
-  /* ---------------- Skills ---------------- */
+  /* =======================================================
+     SKILLS
+  ======================================================= */
 
   const addSkill = () => {
     const value = skillInput.trim();
 
-    if (
-      !value ||
-      draft.skills.some((skill) => skill.toLowerCase() === value.toLowerCase())
-    ) {
+    if (!value) return;
+
+    const currentSkills = Array.isArray(draft.skills) ? draft.skills : [];
+
+    const alreadyExists = currentSkills.some(
+      (skill) => String(skill).toLowerCase() === value.toLowerCase(),
+    );
+
+    if (alreadyExists) {
       setSkillInput("");
       return;
     }
 
-    updateDraft("skills", [...(draft.skills || []), value]);
+    updateDraft("skills", [...currentSkills, value]);
 
     setSkillInput("");
   };
 
-  const removeSkill = (skill) => {
+  const removeSkill = (skillToRemove) => {
     updateDraft(
       "skills",
-      (draft.skills || []).filter((item) => item !== skill),
+      (draft.skills || []).filter((skill) => skill !== skillToRemove),
     );
   };
 
-  /* ---------------- Interests ---------------- */
+  /* =======================================================
+     INTERESTS
+  ======================================================= */
 
   const addInterest = () => {
     const value = interestInput.trim();
 
-    if (
-      !value ||
-      draft.interests.some(
-        (interest) => interest.toLowerCase() === value.toLowerCase(),
-      )
-    ) {
+    if (!value) return;
+
+    const currentInterests = normalizeInterests(draft.interests);
+
+    const alreadyExists = currentInterests.some(
+      (interest) => interest.toLowerCase() === value.toLowerCase(),
+    );
+
+    if (alreadyExists) {
       setInterestInput("");
       return;
     }
 
-    updateDraft("interests", [...(draft.interests || []), value]);
+    updateDraft("interests", [...currentInterests, value]);
 
     setInterestInput("");
   };
 
-  const removeInterest = (interest) => {
+  const removeInterest = (interestToRemove) => {
     updateDraft(
       "interests",
-      (draft.interests || []).filter((item) => item !== interest),
+      normalizeInterests(draft.interests).filter(
+        (interest) => interest !== interestToRemove,
+      ),
     );
   };
 
-  const view = editing ? draft : profile;
+  /* =======================================================
+     DISPLAY HELPERS
+  ======================================================= */
+
+  const displayValue = (value) => {
+    if (value === null || value === undefined || String(value).trim() === "") {
+      return "-";
+    }
+
+    return String(value);
+  };
+
+  const displayList = (items) => {
+    if (!Array.isArray(items) || items.length === 0) {
+      return "No interests added yet.";
+    }
+
+    return items.join(", ");
+  };
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
 
   return (
-    <div className="pd-app-page d-flex flex-column">
+    <div className="pd-app-page">
       <Navbar />
 
-      <main className="flex-grow-1 profile-page py-4 py-lg-5">
+      <main className="profile-page py-4 py-lg-5">
         <div className="container">
-          <form onSubmit={saveChanges}>
-            {/* Header */}
-            <div className="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-              <div>
-                <span className="eyebrow mb-2">Your Profile</span>
+          {/* =================================================
+              HEADER
+          ================================================= */}
 
-                <h1 className="display-6 fw-bold mb-2">Manage Your Profile</h1>
+          <div className="profile-page-header mb-4">
+            <div>
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <FaUserCircle className="text-primary" size={24} />
 
-                <p className="text-muted mb-0">
-                  Keep this information up to date. Your skills, interests and
-                  career preferences help the recommendation system personalize
-                  internship results.
-                </p>
+                <span className="eyebrow">Student Profile</span>
               </div>
 
-              {!editing ? (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={startEditing}
-                >
-                  <FaPen className="me-2" />
-                  Edit Profile
-                </button>
-              ) : (
-                <div className="d-flex gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary"
-                    onClick={cancelEditing}
-                  >
-                    <FaTimes className="me-2" />
-                    Cancel
-                  </button>
+              <h1 className="fw-bold mb-2">Manage Your Profile</h1>
 
-                  <button type="submit" className="btn btn-primary">
-                    <FaSave className="me-2" />
-                    Save Changes
-                  </button>
-                </div>
-              )}
+              <p className="text-muted mb-0">
+                Keep this information up to date. Your skills, interests and
+                career preferences help the recommendation system personalize
+                internship results.
+              </p>
             </div>
 
-            {/* Success */}
-            {showSuccess && (
-              <div
-                className="alert alert-success d-flex align-items-center gap-2 mb-4"
-                role="alert"
+            {!editing ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={startEditing}
               >
-                <FaCheckCircle />
-                Profile saved successfully.
+                <FaPen className="me-2" />
+                Edit Profile
+              </button>
+            ) : (
+              <div className="d-flex gap-2">
                 <button
                   type="button"
-                  className="btn-close ms-auto"
-                  aria-label="Close"
-                  onClick={() => setShowSuccess(false)}
-                />
+                  className="btn btn-outline-secondary"
+                  onClick={cancelEditing}
+                >
+                  <FaTimes className="me-2" />
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  form="profile-form"
+                  className="btn btn-primary"
+                >
+                  <FaSave className="me-2" />
+                  Save Changes
+                </button>
               </div>
             )}
+          </div>
 
+          {/* =================================================
+              SUCCESS MESSAGE
+          ================================================= */}
+
+          {showSuccess && (
+            <div
+              className="alert alert-success d-flex align-items-center mb-4"
+              role="alert"
+            >
+              <FaCheckCircle className="me-2" />
+              Your profile has been updated successfully.
+            </div>
+          )}
+
+          {/* =================================================
+              PROFILE FORM
+          ================================================= */}
+
+          <form id="profile-form" onSubmit={saveChanges}>
             <div className="row g-4">
-              {/* LEFT */}
-              <div className="col-12 col-lg-8">
-                {/* Personal Information */}
-                <section className="dashboard-panel mb-4">
-                  <div className="d-flex align-items-center gap-2 mb-3">
-                    <div className="mini-panel-icon">
-                      <FaUserCircle />
-                    </div>
+              {/* =================================================
+                  LEFT COLUMN
+              ================================================= */}
+
+              <div className="col-lg-8">
+                {/* ===============================================
+                    PERSONAL INFORMATION
+                =============================================== */}
+
+                <section className="details-panel mb-4">
+                  <div className="d-flex align-items-center gap-2 mb-4">
+                    <FaUserCircle className="text-primary" />
 
                     <h2 className="h5 fw-bold mb-0">Personal Information</h2>
                   </div>
 
-                  <div className="row g-3">
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small">Full Name</label>
+                  <div className="row g-4">
+                    {/* Full Name */}
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">
+                        Full Name
+                      </label>
 
                       {editing ? (
                         <input
+                          type="text"
                           className="form-control"
                           value={draft.fullName || ""}
-                          onChange={(e) =>
-                            updateDraft("fullName", e.target.value)
+                          onChange={(event) =>
+                            updateDraft("fullName", event.target.value)
                           }
-                          required
                         />
                       ) : (
-                        <p className="fw-semibold mb-0">
-                          {view.fullName || "-"}
-                        </p>
+                        <div className="profile-value">
+                          {displayValue(profile.fullName)}
+                        </div>
                       )}
                     </div>
 
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small">Email</label>
+                    {/* Email */}
 
-                      {editing ? (
-                        <input
-                          type="email"
-                          className="form-control"
-                          value={draft.email || ""}
-                          onChange={(e) => updateDraft("email", e.target.value)}
-                          required
-                        />
-                      ) : (
-                        <p className="fw-semibold mb-0">{view.email || "-"}</p>
-                      )}
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">Email</label>
+
+                      <div className="profile-value">
+                        {displayValue(profile.email)}
+                      </div>
                     </div>
 
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small">Phone</label>
+                    {/* Phone */}
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">Phone</label>
 
                       {editing ? (
                         <input
+                          type="tel"
                           className="form-control"
                           value={draft.phone || ""}
-                          onChange={(e) => updateDraft("phone", e.target.value)}
+                          onChange={(event) =>
+                            updateDraft("phone", event.target.value)
+                          }
                         />
                       ) : (
-                        <p className="fw-semibold mb-0">{view.phone || "-"}</p>
+                        <div className="profile-value">
+                          {displayValue(profile.phone)}
+                        </div>
                       )}
                     </div>
                   </div>
                 </section>
 
-                {/* Academic Information */}
-                <section className="dashboard-panel mb-4">
-                  <div className="d-flex align-items-center gap-2 mb-3">
-                    <div className="mini-panel-icon">
-                      <FaGraduationCap />
-                    </div>
+                {/* ===============================================
+                    ACADEMIC INFORMATION
+                =============================================== */}
+
+                <section className="details-panel mb-4">
+                  <div className="d-flex align-items-center gap-2 mb-4">
+                    <FaGraduationCap className="text-primary" />
 
                     <h2 className="h5 fw-bold mb-0">Academic Information</h2>
                   </div>
 
-                  <div className="row g-3">
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small">College</label>
+                  <div className="row g-4">
+                    {/* College */}
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">College</label>
 
                       {editing ? (
                         <input
+                          type="text"
                           className="form-control"
                           value={draft.college || ""}
-                          onChange={(e) =>
-                            updateDraft("college", e.target.value)
+                          onChange={(event) =>
+                            updateDraft("college", event.target.value)
                           }
                         />
                       ) : (
-                        <p className="fw-semibold mb-0">
-                          {view.college || "-"}
-                        </p>
+                        <div className="profile-value">
+                          {displayValue(profile.college)}
+                        </div>
                       )}
                     </div>
 
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small">Branch</label>
+                    {/* Degree */}
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">Degree</label>
 
                       {editing ? (
                         <input
+                          type="text"
+                          className="form-control"
+                          value={draft.degree || ""}
+                          onChange={(event) =>
+                            updateDraft("degree", event.target.value)
+                          }
+                        />
+                      ) : (
+                        <div className="profile-value">
+                          {displayValue(profile.degree)}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Branch */}
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">Branch</label>
+
+                      {editing ? (
+                        <input
+                          type="text"
                           className="form-control"
                           value={draft.branch || ""}
-                          onChange={(e) =>
-                            updateDraft("branch", e.target.value)
+                          onChange={(event) =>
+                            updateDraft("branch", event.target.value)
                           }
                         />
                       ) : (
-                        <p className="fw-semibold mb-0">{view.branch || "-"}</p>
+                        <div className="profile-value">
+                          {displayValue(profile.branch)}
+                        </div>
                       )}
                     </div>
 
-                    <div className="col-6 col-md-3">
-                      <label className="form-label small">CGPA</label>
+                    {/* CGPA */}
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">CGPA</label>
 
                       {editing ? (
                         <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="10"
                           className="form-control"
-                          value={draft.cgpa || ""}
-                          onChange={(e) => updateDraft("cgpa", e.target.value)}
+                          value={draft.cgpa ?? ""}
+                          onChange={(event) =>
+                            updateDraft("cgpa", event.target.value)
+                          }
                         />
                       ) : (
-                        <p className="fw-semibold mb-0">{view.cgpa || "-"}</p>
+                        <div className="profile-value">
+                          {displayValue(profile.cgpa)}
+                        </div>
                       )}
                     </div>
 
-                    <div className="col-6 col-md-3">
-                      <label className="form-label small">
+                    {/* Graduation Year */}
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">
                         Graduation Year
                       </label>
 
                       {editing ? (
                         <input
+                          type="number"
                           className="form-control"
                           value={draft.graduationYear || ""}
-                          onChange={(e) =>
-                            updateDraft("graduationYear", e.target.value)
+                          onChange={(event) =>
+                            updateDraft("graduationYear", event.target.value)
                           }
                         />
                       ) : (
-                        <p className="fw-semibold mb-0">
-                          {view.graduationYear || "-"}
-                        </p>
+                        <div className="profile-value">
+                          {displayValue(profile.graduationYear)}
+                        </div>
                       )}
                     </div>
                   </div>
                 </section>
 
-                {/* Skills & Interests */}
-                <section className="dashboard-panel mb-4">
-                  <div className="d-flex align-items-center gap-2 mb-3">
-                    <div className="mini-panel-icon">
-                      <FaBullseye />
-                    </div>
+                {/* ===============================================
+                    SKILLS & INTERESTS
+                =============================================== */}
 
-                    <h2 className="h5 fw-bold mb-0">Skills &amp; Interests</h2>
+                <section className="details-panel mb-4">
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    <FaBullseye className="text-primary" />
+
+                    <h2 className="h5 fw-bold mb-0">Skills & Interests</h2>
                   </div>
 
-                  <p className="small text-muted mb-4">
+                  <p className="text-muted small mb-4">
                     Your skills and interests are used by the recommendation
                     system to personalize internship opportunities.
                   </p>
 
                   {/* Skills */}
-                  <p className="small fw-semibold mb-2">Skills</p>
 
-                  {editing && (
-                    <div className="d-flex gap-2 mb-3">
-                      <input
-                        className="form-control form-control-sm"
-                        placeholder="Add a skill and press Enter"
-                        value={skillInput}
-                        onChange={(e) => setSkillInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addSkill();
-                          }
-                        }}
-                      />
+                  <div className="mb-4">
+                    <label className="form-label fw-semibold">Skills</label>
 
-                      <button
-                        type="button"
-                        className="btn btn-outline-primary btn-sm flex-shrink-0"
-                        onClick={addSkill}
-                      >
-                        <FaPlus className="me-1" />
-                        Add
-                      </button>
-                    </div>
-                  )}
+                    {editing ? (
+                      <>
+                        <div className="input-group mb-3">
+                          <input
+                            type="text"
+                            className="form-control"
+                            placeholder="Add a skill"
+                            value={skillInput}
+                            onChange={(event) =>
+                              setSkillInput(event.target.value)
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                addSkill();
+                              }
+                            }}
+                          />
 
-                  <div className="d-flex flex-wrap gap-2 mb-4">
-                    {(!view.skills || view.skills.length === 0) && (
-                      <span className="text-muted small">
-                        No skills added yet.
-                      </span>
-                    )}
-
-                    {(view.skills || []).map((skill) => (
-                      <span className="skill-pill" key={skill}>
-                        {skill}
-
-                        {editing && (
                           <button
                             type="button"
-                            className="pill-remove"
-                            onClick={() => removeSkill(skill)}
-                            aria-label={`Remove ${skill}`}
+                            className="btn btn-outline-primary"
+                            onClick={addSkill}
                           >
-                            <FaTimes />
+                            <FaPlus />
                           </button>
+                        </div>
+
+                        <div className="d-flex flex-wrap gap-2">
+                          {(draft.skills || []).map((skill) => (
+                            <span
+                              key={skill}
+                              className="badge rounded-pill bg-primary-subtle text-primary-emphasis px-3 py-2"
+                            >
+                              {skill}
+
+                              <button
+                                type="button"
+                                className="btn btn-sm p-0 ms-2 border-0"
+                                onClick={() => removeSkill(skill)}
+                                aria-label={`Remove ${skill}`}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="d-flex flex-wrap gap-2">
+                        {Array.isArray(profile.skills) &&
+                        profile.skills.length > 0 ? (
+                          profile.skills.map((skill) => (
+                            <span
+                              key={skill}
+                              className="badge rounded-pill bg-primary-subtle text-primary-emphasis px-3 py-2"
+                            >
+                              {skill}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-muted">
+                            No skills added yet.
+                          </span>
                         )}
-                      </span>
-                    ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Interests */}
-                  <p className="small fw-semibold mb-2">Interests</p>
 
-                  {editing && (
-                    <div className="d-flex gap-2 mb-3">
-                      <input
-                        className="form-control form-control-sm"
-                        placeholder="Add an interest and press Enter"
-                        value={interestInput}
-                        onChange={(e) => setInterestInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addInterest();
-                          }
-                        }}
-                      />
+                  <div>
+                    <label className="form-label fw-semibold">Interests</label>
 
-                      <button
-                        type="button"
-                        className="btn btn-outline-primary btn-sm flex-shrink-0"
-                        onClick={addInterest}
-                      >
-                        <FaPlus className="me-1" />
-                        Add
-                      </button>
-                    </div>
-                  )}
+                    {editing ? (
+                      <>
+                        <div className="input-group mb-3">
+                          <input
+                            type="text"
+                            className="form-control"
+                            placeholder="Add an interest"
+                            value={interestInput}
+                            onChange={(event) =>
+                              setInterestInput(event.target.value)
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                addInterest();
+                              }
+                            }}
+                          />
 
-                  <div className="d-flex flex-wrap gap-2">
-                    {(!view.interests || view.interests.length === 0) && (
-                      <span className="text-muted small">
-                        No interests added yet.
-                      </span>
-                    )}
-
-                    {(view.interests || []).map((interest) => (
-                      <span className="skill-pill" key={interest}>
-                        {interest}
-
-                        {editing && (
                           <button
                             type="button"
-                            className="pill-remove"
-                            onClick={() => removeInterest(interest)}
-                            aria-label={`Remove ${interest}`}
+                            className="btn btn-outline-primary"
+                            onClick={addInterest}
                           >
-                            <FaTimes />
+                            <FaPlus />
                           </button>
-                        )}
-                      </span>
-                    ))}
+                        </div>
+
+                        <div className="d-flex flex-wrap gap-2">
+                          {normalizeInterests(draft.interests).map(
+                            (interest) => (
+                              <span
+                                key={interest}
+                                className="badge rounded-pill bg-success-subtle text-success-emphasis px-3 py-2"
+                              >
+                                {interest}
+
+                                <button
+                                  type="button"
+                                  className="btn btn-sm p-0 ms-2 border-0"
+                                  onClick={() => removeInterest(interest)}
+                                  aria-label={`Remove ${interest}`}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ),
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="profile-value">
+                        {displayList(profile.interests)}
+                      </div>
+                    )}
                   </div>
                 </section>
 
-                {/* Career Preferences */}
-                <section className="dashboard-panel mb-4">
-                  <div className="d-flex align-items-center gap-2 mb-3">
-                    <div className="mini-panel-icon">
-                      <FaMapMarkerAlt />
-                    </div>
+                {/* ===============================================
+                    CAREER PREFERENCES
+                =============================================== */}
+
+                <section className="details-panel mb-4">
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    <FaMapMarkerAlt className="text-primary" />
 
                     <h2 className="h5 fw-bold mb-0">Career Preferences</h2>
                   </div>
 
-                  <p className="small text-muted mb-4">
-                    Select the type of career and location you are interested
-                    in. These preferences will be provided to the recommendation
-                    system.
+                  <p className="text-muted small mb-4">
+                    These preferences were collected during signup and can also
+                    be updated here.
                   </p>
 
-                  <div className="row g-3">
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small">
-                        Preferred Internship Domain
+                  <div className="row g-4">
+                    {/* Preferred Job Field */}
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">
+                        Preferred Job Field
                       </label>
 
                       {editing ? (
                         <select
                           className="form-select"
-                          value={draft.preferredDomain || ""}
-                          onChange={(e) =>
-                            updateDraft("preferredDomain", e.target.value)
+                          value={draft.preferredJobField || ""}
+                          onChange={(event) =>
+                            updateDraft("preferredJobField", event.target.value)
                           }
                         >
-                          <option value="">Select a domain</option>
+                          <option value="">Select job field</option>
 
-                          {DOMAIN_OPTIONS.map((domain) => (
-                            <option key={domain} value={domain}>
-                              {domain}
+                          {DOMAIN_FIELD_OPTIONS.map((field) => (
+                            <option key={field} value={field}>
+                              {field}
                             </option>
                           ))}
                         </select>
                       ) : (
-                        <p className="fw-semibold mb-0">
-                          {view.preferredDomain || "-"}
-                        </p>
+                        <div className="profile-value">
+                          {displayValue(profile.preferredJobField)}
+                        </div>
                       )}
                     </div>
 
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small">
+                    {/* Preferred Location */}
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">
                         Preferred Location
                       </label>
 
                       {editing ? (
                         <input
+                          type="text"
                           className="form-control"
+                          placeholder="e.g. Delhi, Noida, Bangalore"
                           value={draft.preferredLocation || ""}
-                          onChange={(e) =>
-                            updateDraft("preferredLocation", e.target.value)
-                          }
-                          placeholder="e.g. Delhi, Bengaluru, Remote"
-                        />
-                      ) : (
-                        <p className="fw-semibold mb-0">
-                          {view.preferredLocation || "-"}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </section>
-
-                {/* Links */}
-                <section className="dashboard-panel">
-                  <div className="d-flex align-items-center gap-2 mb-3">
-                    <div className="mini-panel-icon">
-                      <FaLink />
-                    </div>
-
-                    <h2 className="h5 fw-bold mb-0">Professional Links</h2>
-                  </div>
-
-                  <div className="row g-3">
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small">
-                        <FaGithub className="me-1" />
-                        GitHub
-                      </label>
-
-                      {editing ? (
-                        <input
-                          className="form-control"
-                          placeholder="https://github.com/..."
-                          value={draft.github || ""}
-                          onChange={(e) =>
-                            updateDraft("github", e.target.value)
+                          onChange={(event) =>
+                            updateDraft("preferredLocation", event.target.value)
                           }
                         />
-                      ) : view.github ? (
-                        <p className="mb-0">
-                          <a
-                            href={view.github}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {view.github}
-                          </a>
-                        </p>
                       ) : (
-                        <p className="text-muted mb-0">-</p>
+                        <div className="profile-value">
+                          {displayValue(profile.preferredLocation)}
+                        </div>
                       )}
                     </div>
 
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small">
-                        <FaLinkedin className="me-1" />
-                        LinkedIn
+                    {/* Preferred Work Mode */}
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">
+                        Preferred Work Mode
                       </label>
 
                       {editing ? (
-                        <input
-                          className="form-control"
-                          placeholder="https://linkedin.com/in/..."
-                          value={draft.linkedin || ""}
-                          onChange={(e) =>
-                            updateDraft("linkedin", e.target.value)
+                        <select
+                          className="form-select"
+                          value={draft.preferredWorkMode || ""}
+                          onChange={(event) =>
+                            updateDraft("preferredWorkMode", event.target.value)
                           }
-                        />
-                      ) : view.linkedin ? (
-                        <p className="mb-0">
-                          <a
-                            href={view.linkedin}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {view.linkedin}
-                          </a>
-                        </p>
+                        >
+                          <option value="">Select work mode</option>
+
+                          <option value="Remote">Remote</option>
+
+                          <option value="Hybrid">Hybrid</option>
+
+                          <option value="On-site">On-site</option>
+                        </select>
                       ) : (
-                        <p className="text-muted mb-0">-</p>
+                        <div className="profile-value">
+                          {displayValue(profile.preferredWorkMode)}
+                        </div>
                       )}
                     </div>
                   </div>
                 </section>
               </div>
 
-              {/* RIGHT SIDEBAR */}
-              <div className="col-12 col-lg-4">
-                <section className="dashboard-panel details-side">
-                  <h2 className="h6 fw-bold mb-3">Profile Completion</h2>
+              {/* =================================================
+                  RIGHT COLUMN
+              ================================================= */}
 
-                  <div className="profile-progress mb-2">
-                    <div
-                      className="profile-progress-bar"
-                      style={{
-                        width: `${completion}%`,
-                      }}
-                    />
-                  </div>
+              <div className="col-lg-4">
+                <div className="d-flex flex-column gap-4">
+                  {/* =============================================
+                      PROFILE COMPLETION
+                  ============================================= */}
 
-                  <p className="text-muted small mb-3">
-                    {completion}% complete
-                  </p>
+                  <section className="details-side">
+                    <div className="d-flex align-items-center gap-2 mb-3">
+                      <FaCheckCircle className="text-success" />
 
-                  <p className="small text-muted mb-0">
-                    Complete your skills, interests and career preferences so
-                    the recommendation system has the information it needs to
-                    personalize internship results.
-                  </p>
-                </section>
-
-                <section className="dashboard-panel mt-4">
-                  <div className="d-flex align-items-center gap-2 mb-3">
-                    <div className="mini-panel-icon">
-                      <FaBullseye />
+                      <h2 className="h5 fw-bold mb-0">Profile Completion</h2>
                     </div>
 
-                    <div>
-                      <h2 className="h6 fw-bold mb-0">
+                    <div className="text-center py-3">
+                      <div className="fw-bold display-5 text-primary">
+                        {completion}%
+                      </div>
+
+                      <p className="text-muted mb-3">complete</p>
+                    </div>
+
+                    <div className="progress mb-3" style={{ height: "8px" }}>
+                      <div
+                        className="progress-bar"
+                        role="progressbar"
+                        style={{
+                          width: `${completion}%`,
+                        }}
+                        aria-valuenow={completion}
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                      />
+                    </div>
+
+                    <p className="small text-muted mb-0">
+                      Complete your academic information, skills, interests and
+                      career preferences so the recommendation system has the
+                      information it needs.
+                    </p>
+                  </section>
+
+                  {/* =============================================
+                      RECOMMENDATION PROFILE
+                  ============================================= */}
+
+                  <section className="details-side">
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <FaBullseye className="text-primary" />
+
+                      <h2 className="h5 fw-bold mb-0">
                         Recommendation Profile
                       </h2>
-
-                      <small className="text-muted">
-                        Information used by ML
-                      </small>
-                    </div>
-                  </div>
-
-                  <div className="small">
-                    <div className="mb-3">
-                      <strong>Skills</strong>
-
-                      <p className="text-muted mb-0 mt-1">
-                        {view.skills?.length
-                          ? view.skills.join(", ")
-                          : "No skills selected"}
-                      </p>
                     </div>
 
-                    <div className="mb-3">
-                      <strong>Interests</strong>
+                    <p className="small text-muted mb-4">
+                      Information used by ML
+                    </p>
 
-                      <p className="text-muted mb-0 mt-1">
-                        {view.interests?.length
-                          ? view.interests.join(", ")
-                          : "No interests selected"}
-                      </p>
+                    {/* Skills */}
+
+                    <div className="mb-4">
+                      <div className="small fw-semibold text-muted mb-2">
+                        Skills
+                      </div>
+
+                      {Array.isArray(profile.skills) &&
+                      profile.skills.length > 0 ? (
+                        <div className="d-flex flex-wrap gap-2">
+                          {profile.skills.map((skill) => (
+                            <span
+                              key={skill}
+                              className="badge rounded-pill bg-primary-subtle text-primary-emphasis"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="small text-muted">
+                          No skills selected
+                        </div>
+                      )}
                     </div>
+
+                    {/* Interests */}
+
+                    <div className="mb-4">
+                      <div className="small fw-semibold text-muted mb-2">
+                        Interests
+                      </div>
+
+                      {normalizeInterests(profile.interests).length > 0 ? (
+                        <div className="d-flex flex-wrap gap-2">
+                          {normalizeInterests(profile.interests).map(
+                            (interest) => (
+                              <span
+                                key={interest}
+                                className="badge rounded-pill bg-success-subtle text-success-emphasis"
+                              >
+                                {interest}
+                              </span>
+                            ),
+                          )}
+                        </div>
+                      ) : (
+                        <div className="small text-muted">
+                          No interests selected
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Preferred Job Field */}
+
+                    <div className="mb-4">
+                      <div className="small fw-semibold text-muted mb-1">
+                        Preferred Job Field
+                      </div>
+
+                      <div className="small">
+                        {displayValue(profile.preferredJobField)}
+                      </div>
+                    </div>
+
+                    {/* Preferred Location */}
+
+                    <div className="mb-4">
+                      <div className="small fw-semibold text-muted mb-1">
+                        Preferred Location
+                      </div>
+
+                      <div className="small">
+                        {displayValue(profile.preferredLocation)}
+                      </div>
+                    </div>
+
+                    {/* Preferred Work Mode */}
 
                     <div>
-                      <strong>Preferred Domain</strong>
+                      <div className="small fw-semibold text-muted mb-1">
+                        Preferred Work Mode
+                      </div>
 
-                      <p className="text-muted mb-0 mt-1">
-                        {view.preferredDomain || "Not selected"}
-                      </p>
+                      <div className="small">
+                        {displayValue(profile.preferredWorkMode)}
+                      </div>
                     </div>
-                  </div>
-                </section>
+                  </section>
+                </div>
               </div>
             </div>
           </form>
