@@ -16,9 +16,9 @@ import Navbar from "../components/layout/Navbar";
 import Footer from "../components/layout/Footer";
 
 import { useAuth } from "../context/AuthContext";
-
-import { defaultProfile, DOMAIN_OPTIONS } from "../data/profile";
 import api from "../services/api";
+
+import { DOMAIN_OPTIONS } from "../data/profile";
 
 /* =========================================================
    OPTIONS
@@ -40,7 +40,6 @@ const JOB_FIELD_OPTIONS = [
 const DOMAIN_FIELD_OPTIONS = Array.from(
   new Set([
     ...(Array.isArray(DOMAIN_OPTIONS) ? DOMAIN_OPTIONS : []),
-
     ...JOB_FIELD_OPTIONS,
   ]),
 );
@@ -88,9 +87,11 @@ function normalizeInterests(value) {
    COMPLETION
 ========================================================= */
 
-function computeCompletion(profile) {
+function computeCompletion(profile = {}) {
+  const currentProfile = profile || {};
+
   const filled = PROFILE_FIELDS.filter((field) => {
-    const value = profile[field];
+    const value = currentProfile[field];
 
     if (Array.isArray(value)) {
       return value.length > 0;
@@ -115,13 +116,9 @@ export default function Profile() {
      STATE
   ------------------------------------------------------- */
 
-  const [profile, setProfile] = useState(defaultProfile);
+  const [profile, setProfile] = useState(null);
 
-  const [draft, setDraft] = useState(defaultProfile);
-
-  const [loading, setLoading] = useState(Boolean(user?.email));
-
-  const [error, setError] = useState("");
+  const [draft, setDraft] = useState({});
 
   const [editing, setEditing] = useState(false);
 
@@ -131,42 +128,64 @@ export default function Profile() {
 
   const [interestInput, setInterestInput] = useState("");
 
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState("");
+
   /* -------------------------------------------------------
-     LOAD PROFILE
+     RELOAD PROFILE WHEN USER CHANGES
   ------------------------------------------------------- */
 
   useEffect(() => {
     if (!user?.email) {
-      setLoading(false);
-      return;
+      setProfile({});
+      setDraft({});
+      setProfileError("");
+      setProfileLoading(false);
+      return () => {};
     }
 
-    const fetchProfile = async () => {
-      setLoading(true);
-      setError("");
+    setProfileLoading(true);
+    setProfileError("");
 
+    let active = true;
+
+    const loadProfile = async () => {
       try {
         const { data } = await api.get("/profile");
-        const fetchedProfile = {
-          ...defaultProfile,
-          ...data.profile,
-          skills: Array.isArray(data.profile?.skills) ? data.profile.skills : [],
-          interests: normalizeInterests(data.profile?.interests),
-          preferredJobField: data.profile?.preferredJobField || "",
-        };
 
-        setProfile(fetchedProfile);
-        setDraft(fetchedProfile);
-        setEditing(false);
-        setShowSuccess(false);
-      } catch {
-        setError("Unable to load your profile. Please try again.");
+        if (active) {
+          const loadedProfile = data?.profile || {};
+          setProfile(loadedProfile);
+          setDraft(loadedProfile);
+          setEditing(false);
+          setShowSuccess(false);
+        }
+      } catch (error) {
+        console.error("Failed to load profile:", error);
+
+        if (active) {
+          setProfile(null);
+          setDraft({});
+          setProfileError(
+            error.response?.status === 404
+              ? "Student profile unavailable."
+              : "Unable to load your profile information.",
+          );
+        }
       } finally {
-        setLoading(false);
+        if (active) {
+          setProfileLoading(false);
+        }
       }
     };
 
-    fetchProfile();
+    loadProfile();
+
+    return () => {
+      active = false;
+    };
   }, [user?.email]);
 
   /* -------------------------------------------------------
@@ -182,6 +201,7 @@ export default function Profile() {
   const startEditing = () => {
     setDraft(profile);
     setShowSuccess(false);
+    setProfileSaveError("");
     setEditing(true);
   };
 
@@ -190,29 +210,58 @@ export default function Profile() {
     setEditing(false);
     setSkillInput("");
     setInterestInput("");
+    setProfileSaveError("");
   };
 
-  const saveChanges = (event) => {
+  const saveChanges = async (event) => {
     event.preventDefault();
 
+    if (saving) return;
+
     const cleanedProfile = {
-      ...draft,
-
-      interests: normalizeInterests(draft.interests),
-
+      fullName: String(draft.fullName || "").trim(),
+      phone: String(draft.phone || "").trim(),
+      college: String(draft.college || "").trim(),
+      degree: String(draft.degree || "").trim(),
+      cgpa: draft.cgpa,
+      graduationYear: draft.graduationYear,
       skills: Array.isArray(draft.skills) ? draft.skills : [],
-
-      preferredJobField: draft.preferredJobField || "",
+      interests: normalizeInterests(draft.interests),
+      preferredJobField: String(draft.preferredJobField || "").trim(),
+      preferredLocation: String(draft.preferredLocation || "").trim(),
+      preferredWorkMode: String(draft.preferredWorkMode || "").trim(),
     };
 
-    setProfile(cleanedProfile);
-    setDraft(cleanedProfile);
+    setSaving(true);
+    setProfileSaveError("");
+    setShowSuccess(false);
 
-    setEditing(false);
-    setShowSuccess(true);
+    try {
+      await api.put("/profile", cleanedProfile);
 
-    setSkillInput("");
-    setInterestInput("");
+      const savedProfile = {
+        ...profile,
+        ...cleanedProfile,
+      };
+
+      setProfile(savedProfile);
+      setDraft(savedProfile);
+      setEditing(false);
+      setShowSuccess(true);
+      setSkillInput("");
+      setInterestInput("");
+    } catch (error) {
+      console.error("Failed to save profile:", error);
+
+      setProfileSaveError(
+        error.response?.data?.message ||
+          (error.response?.status === 404
+            ? "Student profile unavailable."
+            : "Unable to update your profile. Please try again."),
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateDraft = (field, value) => {
@@ -308,22 +357,52 @@ export default function Profile() {
     return items.join(", ");
   };
 
-  if (loading || error) {
+  /* =======================================================
+     NEW: LOADING SCREEN
+  ======================================================= */
+
+  if (profileLoading) {
     return (
       <div className="pd-app-page">
         <Navbar />
 
         <main className="profile-page py-4 py-lg-5">
           <div className="container">
-            {loading ? (
-              <div className="alert alert-info" role="status">
-                Loading your profile...
-              </div>
-            ) : (
-              <div className="alert alert-danger" role="alert">
-                {error}
-              </div>
-            )}
+            <div
+              className="d-flex flex-column align-items-center justify-content-center text-center"
+              style={{ minHeight: "55vh" }}
+            >
+              <div
+                className="spinner-border text-primary mb-3"
+                role="status"
+                aria-hidden="true"
+              />
+
+              <h2 className="h4 fw-bold mb-2">Loading student data...</h2>
+
+              <p className="text-muted mb-0">
+                Retrieving your profile information.
+              </p>
+            </div>
+          </div>
+        </main>
+
+        <Footer />
+      </div>
+    );
+  }
+
+  if (profileError) {
+    return (
+      <div className="pd-app-page">
+        <Navbar />
+
+        <main className="profile-page py-4 py-lg-5">
+          <div className="container">
+            <div className="alert alert-warning mb-0" role="alert">
+              <h1 className="h4 fw-bold mb-2">Profile unavailable</h1>
+              <p className="mb-0">{profileError}</p>
+            </div>
           </div>
         </main>
 
@@ -387,9 +466,10 @@ export default function Profile() {
                   type="submit"
                   form="profile-form"
                   className="btn btn-primary"
+                  disabled={saving}
                 >
                   <FaSave className="me-2" />
-                  Save Changes
+                  {saving ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             )}
@@ -406,6 +486,12 @@ export default function Profile() {
             >
               <FaCheckCircle className="me-2" />
               Your profile has been updated successfully.
+            </div>
+          )}
+
+          {profileSaveError && (
+            <div className="alert alert-danger mb-4" role="alert">
+              {profileSaveError}
             </div>
           )}
 
@@ -552,9 +638,7 @@ export default function Profile() {
                           type="text"
                           className="form-control"
                           value={draft.branch || ""}
-                          onChange={(event) =>
-                            updateDraft("branch", event.target.value)
-                          }
+                          readOnly
                         />
                       ) : (
                         <div className="profile-value">

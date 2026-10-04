@@ -1,8 +1,8 @@
 import api from "./api";
 import * as mockService from "./mockService";
 
-// Frontend-only mode is the default until the FastAPI backend is connected.
-// Set VITE_USE_MOCK_DATA=false later when the real backend is ready.
+// Mock mode remains available for local development; the real Flask backend
+// is used when VITE_USE_MOCK_DATA=false.
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
 const TOKEN_KEY = "prayasai_token";
 const USER_KEY = "prayasai_user";

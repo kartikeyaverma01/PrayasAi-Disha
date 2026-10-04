@@ -7,18 +7,26 @@ import {
   FaSlidersH,
   FaTrophy,
 } from "react-icons/fa";
-
 import Navbar from "../components/layout/Navbar";
 import Footer from "../components/layout/Footer";
+import api from "../services/api";
+import { fetchLiveInternships, calculateMatch } from "../services/jobService";
 import { useAuth } from "../context/AuthContext";
 
-const SAVED_KEY = "prayasai_saved_recommendations";
+const SAVED_KEY = "prayasai_saved_internships";
 
-// Temporary API adapter.
-// Replace this import/function with the ML team's API service
-// when their endpoint is ready.
-const RECOMMENDATION_API_URL =
-  import.meta.env.VITE_RECOMMENDATION_API_URL || "";
+const getProfileKey = (authUser) =>
+  `prayasai_profile_data_${String(authUser?.email || "").toLowerCase()}`;
+
+const readProfile = (authUser) => {
+  try {
+    const key = getProfileKey(authUser);
+
+    return JSON.parse(localStorage.getItem(key) || "{}");
+  } catch {
+    return {};
+  }
+};
 
 export default function Recommendations() {
   const { user } = useAuth();
@@ -42,125 +50,32 @@ export default function Recommendations() {
     }
   });
 
-  /*
-   * ---------------------------------------------------------
-   * Fetch recommendations from ML/API
-   * ---------------------------------------------------------
-   *
-   * Expected API response:
-   *
-   * {
-   *   "recommendations": [
-   *     {
-   *       "id": 101,
-   *       "title": "Frontend Developer Intern",
-   *       "company": "ABC",
-   *       "location": "Noida",
-   *       "skills": ["React", "JavaScript"],
-   *       "match_percentage": 92,
-   *       "source_url": "https://..."
-   *     }
-   *   ]
-   * }
-   *
-   * The frontend does NOT calculate match percentage.
-   */
-
   useEffect(() => {
     let active = true;
 
     const loadRecommendations = async () => {
-      setLoading(true);
-      setError("");
-
       try {
-        /*
-         * Until the ML endpoint is connected, we show an empty
-         * recommendation state instead of calculating matches
-         * locally.
-         *
-         * Once the ML team's endpoint is ready, this request
-         * can be enabled.
-         */
+        setLoading(true);
+        setError("");
 
-        if (!RECOMMENDATION_API_URL) {
-          if (active) {
-            setItems([]);
-          }
+        const jobs = await fetchLiveInternships();
 
-          return;
-        }
+        const { data } = await api.get("/profile");
+        const currentProfile = data?.profile || {};
 
-        const response = await fetch(RECOMMENDATION_API_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: user?.email || "",
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Recommendation API returned ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        if (!active) return;
-
-        const recommendations = Array.isArray(data?.recommendations)
-          ? data.recommendations
-          : [];
-
-        /*
-         * Normalize only field names.
-         *
-         * No score is calculated here.
-         */
-        const normalized = recommendations.map((item) => ({
-          ...item,
-
-          id: item.id,
-
-          title: item.title || item.role || "Internship",
-
-          role: item.role || item.title || "Internship",
-
-          company: item.company || "Company",
-
-          location: item.location || "Location",
-
-          category: item.category || item.domain || item.job_field || "",
-
-          mode: item.mode || item.work_mode || "",
-
-          skills: Array.isArray(item.skills) ? item.skills : [],
-
-          stipend: item.stipend || "Not specified",
-
-          duration: item.duration || "",
-
-          posted: item.posted || item.postedAt || "",
-
-          /*
-           * IMPORTANT:
-           * This value comes from the ML/API response.
-           */
-          match_percentage: Number(
-            item.match_percentage ?? item.matchPercentage ?? item.match ?? 0,
-          ),
-
-          source_url: item.source_url || item.sourceUrl || item.url || "",
-        }));
-
-        setItems(normalized);
-      } catch (err) {
-        console.error("Recommendation API error:", err);
+        const matchedJobs = jobs.map((job) =>
+          calculateMatch(job, currentProfile),
+        );
 
         if (active) {
+          setItems(matchedJobs);
+        }
+      } catch (e) {
+        console.error("Failed to load recommendations:", e);
+
+        if (active) {
+          setError("Live opportunities could not be loaded.");
           setItems([]);
-          setError("Recommendations could not be loaded from the server.");
         }
       } finally {
         if (active) {
@@ -174,86 +89,51 @@ export default function Recommendations() {
     return () => {
       active = false;
     };
-  }, [user?.email]);
+  }, [user]);
 
-  /*
-   * ---------------------------------------------------------
-   * Filter options
-   * ---------------------------------------------------------
-   */
+  const categories = [
+    ...new Set(items.map((item) => item.category).filter(Boolean)),
+  ].sort();
 
-  const categories = useMemo(() => {
-    return [
-      ...new Set(items.map((item) => item.category).filter(Boolean)),
-    ].sort();
-  }, [items]);
-
-  const locations = useMemo(() => {
-    return [
-      ...new Set(items.map((item) => item.location).filter(Boolean)),
-    ].sort();
-  }, [items]);
-
-  /*
-   * ---------------------------------------------------------
-   * Search / filtering / sorting
-   * ---------------------------------------------------------
-   *
-   * Sorting by match percentage is allowed because the
-   * percentage is already supplied by the ML/API.
-   *
-   * The frontend does NOT calculate it.
-   */
+  const locations = [
+    ...new Set(items.map((item) => item.location).filter(Boolean)),
+  ].sort();
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
 
     const list = items.filter((item) => {
-      const searchable = [
-        item.title,
-        item.role,
-        item.company,
-        item.location,
-        item.category,
-        ...(Array.isArray(item.skills) ? item.skills : []),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+      const searchable = `
+        ${item.role || ""}
+        ${item.company || ""}
+        ${item.location || ""}
+        ${item.category || ""}
+        ${(item.skills || []).join(" ")}
+      `.toLowerCase();
 
       return (
         (!q || searchable.includes(q)) &&
         (!category || item.category === category) &&
         (!location || item.location === location) &&
-        Number(item.match_percentage || 0) >= Number(minMatch)
+        item.match >= Number(minMatch)
       );
     });
 
     return [...list].sort((a, b) => {
       if (sort === "stipend") {
-        const stipendA = Number(String(a.stipend || "").replace(/[^0-9]/g, ""));
-
-        const stipendB = Number(String(b.stipend || "").replace(/[^0-9]/g, ""));
-
-        return stipendB - stipendA;
+        return (
+          Number(b.stipend?.toString().replace(/[^0-9]/g, "") || 0) -
+          Number(a.stipend?.toString().replace(/[^0-9]/g, "") || 0)
+        );
       }
 
       if (sort === "recent") {
-        return Number(b.postedAt || 0) - Number(a.postedAt || 0);
+        return (b.postedAt || 0) - (a.postedAt || 0);
       }
 
-      /*
-       * Highest ML-provided match first.
-       */
-      return Number(b.match_percentage || 0) - Number(a.match_percentage || 0);
+      return b.match - a.match;
     });
   }, [items, query, category, location, minMatch, sort]);
-
-  /*
-   * ---------------------------------------------------------
-   * Saved internships
-   * ---------------------------------------------------------
-   */
 
   const toggleSave = (id) => {
     const next = saved.includes(id)
@@ -273,7 +153,7 @@ export default function Recommendations() {
     setSort("match");
   };
 
-  const topMatch = results[0]?.match_percentage;
+  const top = results[0]?.match;
 
   return (
     <div className="pd-app-page">
@@ -281,31 +161,31 @@ export default function Recommendations() {
 
       <main className="internships-page py-4 py-lg-5">
         <div className="container">
-          {/* Header */}
+          {/* HEADER */}
           <div className="mb-4">
-            <span className="eyebrow mb-2">AI Recommendations</span>
+            <span className="eyebrow mb-2">Live AI Recommendations</span>
 
             <h1 className="display-6 fw-bold mb-2">
               Opportunities matched to you.
             </h1>
 
             <p className="text-muted mb-0">
-              Recommendations are provided by the PrayasAI Disha recommendation
-              service based on your profile.
+              Live internship listings are fetched online and scored locally
+              against your profile.
             </p>
           </div>
 
-          {/* Loading */}
+          {/* LOADING */}
           {loading && (
             <div className="dashboard-panel mb-4">
-              Fetching your recommendations...
+              Fetching live internship opportunities...
             </div>
           )}
 
-          {/* Error */}
+          {/* ERROR */}
           {error && <div className="alert alert-warning">{error}</div>}
 
-          {/* Search */}
+          {/* SEARCH + SORT */}
           <div className="internship-search-panel mb-3">
             <div className="search-input-wrap flex-grow-1">
               <FaSearch />
@@ -332,15 +212,15 @@ export default function Recommendations() {
               value={sort}
               onChange={(e) => setSort(e.target.value)}
             >
-              <option value="match">Highest Match</option>
+              <option value="match">Best match</option>
 
-              <option value="recent">Recently Posted</option>
+              <option value="recent">Recently posted</option>
 
-              <option value="stipend">Highest Stipend</option>
+              <option value="stipend">Highest stipend</option>
             </select>
           </div>
 
-          {/* Filters */}
+          {/* FILTERS */}
           <div
             className={`row g-3 mb-4 ${showFilters ? "" : "d-none d-lg-flex"}`}
           >
@@ -401,148 +281,119 @@ export default function Recommendations() {
             </div>
           </div>
 
-          {/* Result count */}
+          {/* RESULT COUNT */}
           <div className="d-flex justify-content-between align-items-center mb-3">
             <span className="small text-muted">
-              {results.length} recommendation
-              {results.length === 1 ? "" : "s"} found
+              {results.length} live internships found
             </span>
           </div>
 
-          {/* Cards */}
+          {/* CARDS */}
           <div className="row g-4">
-            {results.map((item) => {
-              const isTopMatch =
-                Number(item.match_percentage || 0) === Number(topMatch || 0);
+            {results.map((item) => (
+              <div className="col-12 col-lg-6" key={item.id}>
+                <article
+                  className={`internship-card h-100 ${
+                    item.match === top ? "best-match" : ""
+                  }`}
+                >
+                  {/* BEST MATCH */}
+                  {item.match === top && (
+                    <div className="best-match-ribbon">
+                      <FaTrophy className="me-1" />
+                      Best Match
+                    </div>
+                  )}
 
-              return (
-                <div className="col-12 col-lg-6" key={item.id}>
-                  <article
-                    className={`internship-card h-100 ${
-                      isTopMatch ? "best-match" : ""
-                    }`}
-                  >
-                    {/* Best Match */}
-                    {isTopMatch && (
-                      <div className="best-match-ribbon">
-                        <FaTrophy className="me-1" />
-                        Best Match
-                      </div>
-                    )}
-
-                    {/* Header */}
-                    <div className="d-flex justify-content-between gap-3">
-                      <div className="d-flex gap-3 min-w-0">
-                        <div className="company-avatar large">
-                          {item.company?.[0] || "C"}
-                        </div>
-
-                        <div className="min-w-0">
-                          <h2 className="h5 fw-bold mb-1">
-                            {item.title || item.role || "Internship"}
-                          </h2>
-
-                          <p className="small text-muted mb-1">
-                            {item.company}
-                          </p>
-
-                          <p className="small text-muted mb-0">
-                            <FaMapMarkerAlt className="me-1" />
-
-                            {item.location || "Location not specified"}
-
-                            {item.mode ? ` · ${item.mode}` : ""}
-                          </p>
-                        </div>
+                  {/* HEADER */}
+                  <div className="d-flex justify-content-between gap-3">
+                    <div className="d-flex gap-3 min-w-0">
+                      <div className="company-avatar large">
+                        {item.company?.[0] || "C"}
                       </div>
 
-                      {/* Save */}
-                      <button
-                        type="button"
-                        className={`save-button ${
-                          saved.includes(item.id) ? "saved" : ""
-                        }`}
-                        onClick={() => toggleSave(item.id)}
-                        aria-label={
-                          saved.includes(item.id)
-                            ? "Remove saved internship"
-                            : "Save internship"
-                        }
-                      >
-                        <FaBookmark />
-                      </button>
+                      <div className="min-w-0">
+                        <h2 className="h5 fw-bold mb-1">{item.role}</h2>
+
+                        <p className="small text-muted mb-1">{item.company}</p>
+
+                        <p className="small text-muted mb-0">
+                          <FaMapMarkerAlt className="me-1" />
+                          {item.location} · {item.mode}
+                        </p>
+                      </div>
                     </div>
 
-                    {/* Match */}
-                    <div className="d-flex align-items-center justify-content-between mt-3">
-                      <div className="match-badge">
-                        <strong>{Number(item.match_percentage || 0)}%</strong>{" "}
-                        match
-                      </div>
-
-                      {item.posted && (
-                        <span className="small text-muted">{item.posted}</span>
-                      )}
-                    </div>
-
-                    {/* Skills */}
-                    {Array.isArray(item.skills) && item.skills.length > 0 && (
-                      <div className="d-flex flex-wrap gap-2 my-3">
-                        {item.skills.map((skill) => (
-                          <span
-                            className="skill-pill matched"
-                            key={`${item.id}-${skill}`}
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Meta */}
-                    <div className="internship-meta">
-                      {item.stipend && <span>{item.stipend}</span>}
-
-                      {item.category && <span>{item.category}</span>}
-
-                      {item.duration && <span>{item.duration}</span>}
-                    </div>
-
-                    {/* Details */}
-                    <Link
-                      className="btn btn-primary w-100 mt-3"
-                      to={`/recommendations/${encodeURIComponent(item.id)}`}
+                    <button
+                      type="button"
+                      className={`save-button ${
+                        saved.includes(item.id) ? "saved" : ""
+                      }`}
+                      onClick={() => toggleSave(item.id)}
                     >
-                      View Details
-                    </Link>
-                  </article>
-                </div>
-              );
-            })}
+                      <FaBookmark />
+                    </button>
+                  </div>
+
+                  {/* MATCH */}
+                  <div className="d-flex align-items-center justify-content-between mt-3">
+                    <div className="match-badge">
+                      <strong>{item.match}%</strong> match
+                    </div>
+
+                    <span className="small text-muted">{item.posted}</span>
+                  </div>
+
+                  {/* SKILLS */}
+                  <div className="d-flex flex-wrap gap-2 my-3">
+                    {item.matchedSkills?.map((skill) => (
+                      <span
+                        className="skill-pill matched"
+                        key={`m-${item.id}-${skill}`}
+                      >
+                        {skill}
+                      </span>
+                    ))}
+
+                    {item.missingSkills?.map((skill) => (
+                      <span
+                        className="skill-pill missing"
+                        key={`x-${item.id}-${skill}`}
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* META */}
+                  <div className="internship-meta">
+                    <span>{item.stipend}</span>
+
+                    <span>{item.category}</span>
+                  </div>
+
+                  {/* DETAILS */}
+                  <Link
+                    className="btn btn-primary w-100 mt-3"
+                    to={`/recommendations/${encodeURIComponent(item.id)}`}
+                  >
+                    View Details
+                  </Link>
+                </article>
+              </div>
+            ))}
           </div>
 
-          {/* Empty State */}
+          {/* EMPTY */}
           {!loading && !results.length && (
             <div className="empty-state">
               <FaSearch />
 
-              <h2 className="h5 fw-bold mt-3">No recommendations found</h2>
+              <h2 className="h5 fw-bold mt-3">No live recommendations found</h2>
 
               <p className="text-muted">
-                {RECOMMENDATION_API_URL
-                  ? "Try another search or reset your filters."
-                  : "The ML recommendation API has not been connected yet."}
+                Try another search or reset your filters.
               </p>
-
-              {(query || category || location || minMatch !== "0") && (
-                <button
-                  type="button"
-                  className="btn btn-outline-primary"
-                  onClick={clearFilters}
-                >
-                  Reset Filters
-                </button>
-              )}
             </div>
           )}
         </div>

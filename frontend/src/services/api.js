@@ -2,9 +2,10 @@ import axios from "axios";
 
 // Every real (non-mock) request in the app goes through this instance.
 // Swapping VITE_USE_MOCK_DATA to false is the only change needed to point
-// the whole frontend at the FastAPI backend - no component changes required.
+// auth and profile requests at the Flask backend.
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api",
+  baseURL:
+    import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5000/api",
   headers: {
     "Content-Type": "application/json",
   },
